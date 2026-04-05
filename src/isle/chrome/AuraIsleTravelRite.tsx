@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Orbit } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { ISLE_DESTINATIONS, SELECTOR_COPY } from "@/isle/chrome/isleDestinations";
+import { ENTRY_PATH_COPY, EXPERIENCE_DESTINATIONS } from "@/isle/chrome/isleDestinations";
 import { useAppMode } from "@/isle/ModeContext";
 import type { AppMode } from "@/isle/types";
 
@@ -119,7 +119,7 @@ export function AuraIsleTravelRite() {
               </div>
 
               <div className="px-2 py-2">
-                {ISLE_DESTINATIONS.map((row) => {
+                {EXPERIENCE_DESTINATIONS.map((row) => {
                   const here = row.mode != null && row.mode === current;
                   const can = row.mode != null;
                   return (
@@ -166,7 +166,7 @@ export function AuraIsleTravelRite() {
                   type="button"
                   className="w-full rounded-xl border border-white/[0.1] px-3 py-3 text-left transition hover:bg-[rgba(255,252,248,0.04)]"
                   style={{ borderWidth: "0.5px" }}
-                  onClick={() => go("selector")}
+                  onClick={() => go("entry")}
                 >
                   <span
                     className="font-serif text-[13px]"
@@ -175,10 +175,10 @@ export function AuraIsleTravelRite() {
                       color: "rgba(232,226,244,0.88)",
                     }}
                   >
-                    {SELECTOR_COPY.title}
+                    {ENTRY_PATH_COPY.title}
                   </span>
                   <p className="mt-1 text-[10px]" style={{ color: "rgba(180,176,198,0.48)" }}>
-                    {SELECTOR_COPY.subtitle}
+                    {ENTRY_PATH_COPY.subtitle}
                   </p>
                 </button>
               </div>

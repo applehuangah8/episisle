@@ -13,7 +13,7 @@ import { readModeFromLocation, writeModeToUrl } from "@/isle/urlMode";
 
 export type ModeContextValue = {
   mode: AppMode;
-  /** Switch world + sync URL (replaceState). Unmounts the other mode tree. */
+  /** Switch experience layer + sync URL (replaceState). Unmounts the other mode tree. */
   setMode: (next: AppMode) => void;
 };
 
@@ -25,9 +25,7 @@ export function useAppMode(): ModeContextValue {
   return v;
 }
 
-/**
- * Holds current isle/mode only. No zustand, no Focus assumptions.
- */
+/** Holds current `AppMode` only. No zustand, no Focus assumptions. */
 export function ModeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<AppMode>(() => readModeFromLocation());
 

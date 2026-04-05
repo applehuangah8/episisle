@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Plane } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { ISLE_DESTINATIONS, SELECTOR_COPY } from "@/isle/chrome/isleDestinations";
+import { ENTRY_PATH_COPY, EXPERIENCE_DESTINATIONS } from "@/isle/chrome/isleDestinations";
 import { useAppMode } from "@/isle/ModeContext";
 import type { AppMode } from "@/isle/types";
 
@@ -59,7 +59,7 @@ export function FocusIsleTravelHud() {
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-controls={menuId}
-          title="島嶼航線"
+          title="體驗路徑"
           onClick={() => setOpen((o) => !o)}
         >
           <Plane className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
@@ -76,7 +76,7 @@ export function FocusIsleTravelHud() {
             <motion.div
               id={menuId}
               role="listbox"
-              aria-label="選擇島嶼或回到選島主頁"
+              aria-label="切換體驗層或返回起點"
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -85,9 +85,9 @@ export function FocusIsleTravelHud() {
               style={{ borderWidth: "0.5px" }}
             >
               <p className="px-3 pb-1 pt-2 text-[9px] font-medium uppercase tracking-[0.28em] text-epis-ink/38">
-                島嶼
+                路徑
               </p>
-              {ISLE_DESTINATIONS.map((row) => {
+              {EXPERIENCE_DESTINATIONS.map((row) => {
                 const here = row.mode != null && row.mode === current;
                 const can = row.mode != null;
                 return (
@@ -120,10 +120,10 @@ export function FocusIsleTravelHud() {
               <button
                 type="button"
                 className="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition hover:bg-[var(--color-glass)]/80"
-                onClick={() => go("selector")}
+                onClick={() => go("entry")}
               >
-                <span className="text-[12px] font-medium text-epis-ink/82">{SELECTOR_COPY.title}</span>
-                <span className="text-[10px] text-epis-ink/45">{SELECTOR_COPY.subtitle}</span>
+                <span className="text-[12px] font-medium text-epis-ink/82">{ENTRY_PATH_COPY.title}</span>
+                <span className="text-[10px] text-epis-ink/45">{ENTRY_PATH_COPY.subtitle}</span>
               </button>
             </motion.div>
           ) : null}

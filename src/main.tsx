@@ -17,13 +17,10 @@ if (!el) throw new Error("Root element #root not found");
 
 
 /**
-
- * Single entry: Mode Orchestrator (Isle A ↔ Isle B).
-
- * - Default: Focus (`App`) inside orchestrator.
-
- * - `?aura=1` or `#/aura`: Aura prototype; SPA switch, no reload.
-
+ * Single entry: experience orchestrator (Entry Path ↔ worldFocus ↔ auraWorld).
+ * - Default: Layer 1 Entry Path (`EntryPathSelector`).
+ * - `?isle=focus`: worldFocus — existing `App` (focusView).
+ * - `?isle=aura` / `?aura=1` / `#/aura`: Layer 2 Aura World (3D diorama).
  */
 
 createRoot(el).render(

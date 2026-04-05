@@ -1,25 +1,46 @@
 import type { AppMode } from "@/isle/types";
 
 /**
- * Multi-Isle 選單資料源（orchestrator 專用；與 selector 畫面三島對齊，方便擴充 Isle C）。
+ * Travel HUD rows: navigable experience layers (not “isle A/B” product naming).
  */
-export type IsleDestinationKey = "focus" | "aura" | "quiet";
+export type ExperienceDestinationKey = "worldFocus" | "auraWorld" | "locked";
 
-export type IsleDestinationRow = {
-  key: IsleDestinationKey;
-  /** 可導航時為目標 mode；null 表示尚未開放 */
+export type ExperienceDestinationRow = {
+  key: ExperienceDestinationKey;
+  /** Navigable target mode; null = not available */
   mode: AppMode | null;
   title: string;
   subtitle: string;
 };
 
-export const ISLE_DESTINATIONS: IsleDestinationRow[] = [
-  { key: "focus", mode: "focus", title: "Focus", subtitle: "Isle A · 工作與整理" },
-  { key: "aura", mode: "aura", title: "Aura", subtitle: "Isle B · 療癒與創造" },
-  { key: "quiet", mode: null, title: "靜域", subtitle: "Isle C · 即將啟航" },
+export const EXPERIENCE_DESTINATIONS: ExperienceDestinationRow[] = [
+  {
+    key: "worldFocus",
+    mode: "worldFocus",
+    title: "專注",
+    subtitle: "focusView · 工作介面",
+  },
+  {
+    key: "auraWorld",
+    mode: "auraWorld",
+    title: "Aura 場景",
+    subtitle: "空間場景 · 探索 World",
+  },
+  { key: "locked", mode: null, title: "未知", subtitle: "尚未解鎖" },
 ];
 
-export const SELECTOR_COPY = {
-  title: "星圖主序",
-  subtitle: "回到選島畫面",
+/** @deprecated use EXPERIENCE_DESTINATIONS */
+export const ISLE_DESTINATIONS = EXPERIENCE_DESTINATIONS;
+
+export const ENTRY_PATH_COPY = {
+  title: "返回起點",
+  subtitle: "回到旅程開始畫面",
 } as const;
+
+/** @deprecated use ENTRY_PATH_COPY */
+export const SELECTOR_COPY = ENTRY_PATH_COPY;
+
+/** @deprecated use ExperienceDestinationKey */
+export type IsleDestinationKey = ExperienceDestinationKey;
+/** @deprecated use ExperienceDestinationRow */
+export type IsleDestinationRow = ExperienceDestinationRow;
