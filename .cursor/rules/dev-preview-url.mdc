@@ -1,0 +1,11 @@
+---
+description: 本機預覽／Simple Browser 應使用的 URL（避免內嵌預覽 connection failed）
+alwaysApply: true
+---
+
+# 本機預覽 URL（Epis isle）
+
+- 在 Cursor 內建預覽、Simple Browser、或建議使用者開啟專案時，**預設使用**：`http://127.0.0.1:5173/`（**不要**加 query）。
+- **不要**預設開 `http://localhost:5173/?isle=focus`：`?isle=focus` 只應在使用者**明確要測專注模式**時使用；亂開容易造成內嵌預覽顯示 connection failed，或與未啟動的 dev server 不同步。
+- 開頁面前請確認已執行 `npm run dev`（Vite 預設埠 **5173**）。
+- 若內嵌預覽仍失敗，可改在系統瀏覽器開同一網址；`127.0.0.1` 通常比 `localhost` 在內嵌 WebView 裡穩定。

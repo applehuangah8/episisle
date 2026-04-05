@@ -1,0 +1,176 @@
+@import "./styles/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--epis-font-sans);
+  background: var(--color-app-bg);
+  color: var(--color-text);
+  letter-spacing: var(--epis-tracking);
+  -webkit-font-smoothing: antialiased;
+}
+
+/**
+ * 積木預設：細線描邊 + 層次陰影（district 外殼、模組卡片可疊加毛玻璃）。
+ * 模組專用樣式可另加 class，不覆寫此基底亦可。
+ */
+@layer components {
+  .epis-brick {
+    border-width: var(--border-width);
+    border-style: solid;
+    border-color: var(--epis-brick-border-light);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-block);
+  }
+
+  .epis-brick-glass {
+    background: var(--color-glass);
+    backdrop-filter: var(--blur-effect);
+    -webkit-backdrop-filter: var(--blur-effect);
+  }
+
+  /** 城鎮區：磨砂壓克力／白瓷 + 微弱環境遮蔽 */
+  .epis-brick-town {
+    background: var(--epis-town-acrylic);
+    border-color: var(--epis-brick-border-light);
+    box-shadow: var(--epis-town-ao), var(--shadow-block);
+    backdrop-filter: blur(14px) saturate(1.08);
+    -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  }
+
+  /** 模組標籤：印章凹陷 */
+  .epis-stamp-badge {
+    letter-spacing: 0.12em;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 -1px 1px rgba(255, 255, 255, 0.55);
+    border: 0.5px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(245, 247, 250, 0.55) 100%);
+  }
+
+  /** 多模組疊片：留白分隔，類型以左側色帶區分 */
+  .epis-module-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .epis-module-sheet {
+    position: relative;
+    border-radius: 16px;
+    padding: 6px 8px 6px 12px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.35),
+      0 6px 18px -8px rgba(58, 48, 40, 0.08);
+  }
+
+  .epis-module-sheet::before {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 10px;
+    bottom: 10px;
+    width: 3px;
+    border-radius: 999px;
+    opacity: 0.88;
+    pointer-events: none;
+  }
+
+  .epis-module-sheet--content {
+    background: linear-gradient(
+      105deg,
+      rgba(245, 228, 210, 0.42) 0%,
+      rgba(255, 252, 248, 0.35) 38%,
+      rgba(255, 255, 255, 0.2) 100%
+    );
+  }
+
+  .epis-module-sheet--content::before {
+    background: linear-gradient(180deg, #c9a882 0%, #e8d4bc 100%);
+    box-shadow: 0 0 12px rgba(201, 168, 130, 0.25);
+  }
+
+  .epis-module-sheet--task {
+    background: linear-gradient(
+      105deg,
+      rgba(210, 228, 218, 0.4) 0%,
+      rgba(248, 252, 250, 0.32) 45%,
+      rgba(255, 255, 255, 0.18) 100%
+    );
+  }
+
+  .epis-module-sheet--task::before {
+    background: linear-gradient(180deg, #7a9e8c 0%, #b8d4c4 100%);
+    box-shadow: 0 0 12px rgba(122, 158, 140, 0.22);
+  }
+
+  .epis-module-sheet--next {
+    background: linear-gradient(
+      105deg,
+      rgba(240, 216, 200, 0.38) 0%,
+      rgba(255, 250, 246, 0.3) 42%,
+      rgba(255, 255, 255, 0.16) 100%
+    );
+  }
+
+  .epis-module-sheet--next::before {
+    background: linear-gradient(180deg, #d4a088 0%, #f0d0c0 100%);
+    box-shadow: 0 0 12px rgba(212, 160, 136, 0.22);
+  }
+
+  .epis-module-sheet--ext {
+    background: linear-gradient(
+      105deg,
+      rgba(228, 220, 240, 0.35) 0%,
+      rgba(252, 250, 255, 0.28) 44%,
+      rgba(255, 255, 255, 0.14) 100%
+    );
+  }
+
+  .epis-module-sheet--ext::before {
+    background: linear-gradient(180deg, #9b8cb8 0%, #d0c8e8 100%);
+    box-shadow: 0 0 12px rgba(155, 140, 184, 0.2);
+  }
+
+  .epis-canvas-pearl {
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 125% 85% at 10% 16%, var(--epis-pearl-a) 0%, transparent 52%),
+      radial-gradient(ellipse 95% 75% at 86% 20%, var(--epis-pearl-shimmer) 0%, transparent 46%),
+      radial-gradient(ellipse 80% 95% at 48% 92%, var(--epis-pearl-b) 0%, transparent 58%);
+    opacity: 0.88;
+  }
+
+  .epis-canvas-veil {
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.02);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+
+  /** IdentityBlock：外層淡金邊 10s 極低調流光 */
+  .epis-identity-border-outer {
+    animation: epis-identity-border-flow 10s ease-in-out infinite;
+  }
+
+  @keyframes epis-identity-border-flow {
+    0%,
+    100% {
+      opacity: 0.4;
+      border-color: rgba(218, 195, 140, 0.32);
+      box-shadow: 0 0 0 0.5px rgba(218, 195, 140, 0.22), 0 0 14px rgba(142, 180, 196, 0.06);
+    }
+    50% {
+      opacity: 0.55;
+      border-color: rgba(236, 218, 168, 0.48);
+      box-shadow: 0 0 0 0.5px rgba(236, 218, 168, 0.36), 0 0 22px rgba(150, 200, 188, 0.12);
+    }
+  }
+}

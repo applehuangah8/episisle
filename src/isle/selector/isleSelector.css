@@ -1,0 +1,116 @@
+/**
+ * Isle Selector — atmospheric layers only. Scoped under .isle-selector-root
+ */
+.isle-selector-root {
+  --isle-sel-bg0: #121520;
+  --parallax-x: 0;
+  --parallax-y: 0;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse 120% 100% at 50% 0%, #252240 0%, var(--isle-sel-bg0) 42%, #0c0e14 100%);
+  color: rgba(245, 240, 252, 0.72);
+}
+
+.isle-selector-root *,
+.isle-selector-root *::before,
+.isle-selector-root *::after {
+  box-sizing: border-box;
+}
+
+.isle-sel-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--parallax-x) * 4px),
+    calc(var(--parallax-y) * 3px),
+    0
+  );
+  will-change: transform;
+}
+
+.isle-sel-star {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 252, 255, 0.35);
+  box-shadow: 0 0 6px rgba(200, 198, 255, 0.12);
+  animation: isle-sel-twinkle var(--tw-dur, 5s) ease-in-out var(--tw-delay, 0s) infinite alternate;
+}
+
+@keyframes isle-sel-twinkle {
+  0% {
+    opacity: var(--tw-a, 0.15);
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: var(--tw-b, 0.55);
+    transform: scale(1.08);
+  }
+}
+
+.isle-sel-islands-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  transform: translate3d(
+    calc(var(--parallax-x) * 14px),
+    calc(var(--parallax-y) * 11px),
+    0
+  );
+  will-change: transform;
+}
+
+/* Subtle vertical drift — decoupled from Framer hover */
+.isle-sel-island-float {
+  animation: isle-sel-float var(--float-dur, 5.5s) ease-in-out var(--float-delay, 0s) infinite;
+}
+
+@keyframes isle-sel-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1.6px);
+  }
+}
+
+.isle-sel-clouds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: translate3d(
+    calc(var(--parallax-x) * 26px),
+    calc(var(--parallax-y) * 18px),
+    0
+  );
+  will-change: transform;
+}
+
+.isle-sel-cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 40% 40%,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(200, 196, 220, 0.04) 45%,
+    transparent 70%
+  );
+  filter: blur(24px);
+  animation: isle-sel-drift var(--drift-dur, 80s) linear infinite;
+}
+
+@keyframes isle-sel-drift {
+  0% {
+    transform: translate3d(var(--drift-x0, -8%), 0, 0);
+  }
+  100% {
+    transform: translate3d(var(--drift-x1, 8%), 0, 0);
+  }
+}

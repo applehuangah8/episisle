@@ -1,0 +1,18 @@
+/**
+ * Aura Mode (Isle B prototype) — visual tokens only.
+ * Scoped naming; never imported into Focus Mode / Isle A surfaces.
+ */
+:root {
+  --aura-bg-deep: #2a2e32;
+  --aura-bg-mid: #353a3f;
+  --aura-bg-wash: #3d4349;
+  --aura-paper: #e8e4dc;
+  --aura-paper-edge: #d4cfc4;
+  --aura-ink: #3a3834;
+  --aura-ink-muted: rgba(58, 56, 52, 0.55);
+  --aura-wood: #5c5348;
+  --aura-accent: #7a6f62;
+  --aura-shadow-deep: rgba(12, 14, 18, 0.45);
+  --aura-shadow-soft: rgba(28, 32, 38, 0.22);
+  --aura-haze: rgba(245, 242, 236, 0.06);
+}

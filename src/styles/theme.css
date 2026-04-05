@@ -1,0 +1,82 @@
+/**
+ * Epis isle — 精緻微縮小人國
+ * 治癒、清澈、低飽和；後續模組可另疊專用 class 或變數。
+ */
+:root {
+  /* —— 你指定的核心 token —— */
+  --color-canvas-bg: #f5f7f9;
+  /* 珍珠底：多層高光（由 Canvas 疊加） */
+  --epis-pearl-a: rgba(255, 255, 255, 0.55);
+  --epis-pearl-b: rgba(232, 238, 246, 0.35);
+  --epis-pearl-shimmer: rgba(255, 252, 248, 0.22);
+  --color-grid: rgba(255, 255, 255, 0.8);
+  --color-wild-block: rgba(189, 204, 201, 0.5);
+  --color-town-bg: #ffffff;
+  --color-stroke: #5a6066;
+  --border-width: 0.5px;
+  --border-radius: 24px;
+  --blur-effect: blur(10px);
+  --shadow-block: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 10px -2px rgba(0, 0, 0, 0.02);
+
+  /* —— 延伸：文字與層次（與 stroke 同系，更淡） —— */
+  --color-text: #5a6066;
+  --color-text-muted: rgba(90, 96, 102, 0.55);
+  --color-accent: #8eb4c4;
+  --color-accent-soft: rgba(142, 180, 196, 0.35);
+
+  /* 毛玻璃／積木釉面 */
+  --color-glass: rgba(255, 255, 255, 0.52);
+  --color-glass-hover: rgba(255, 255, 255, 0.78);
+  --color-panel-border: rgba(90, 96, 102, 0.14);
+
+  /* App 背景：極淡灰階，不搶畫布 */
+  --color-app-bg: linear-gradient(180deg, #eef1f4 0%, #f5f7f9 55%, #f2f4f7 100%);
+
+  /* 區域氛圍（小鎮積木色片，透光、不濃） */
+  --color-zone-wild-tint: rgba(189, 204, 201, 0.38);
+  --color-zone-instagram-tint: rgba(198, 214, 228, 0.42);
+  --color-zone-youtube-tint: rgba(228, 218, 206, 0.4);
+  --color-zone-musee-tint: rgba(210, 204, 228, 0.4);
+
+  /* —— 相容舊 class 名（指向新語彙） —— */
+  --epis-mist: #eef1f4;
+  --epis-sky: #c8d8e4;
+  --epis-sea: var(--color-accent);
+  --epis-foam: #fafbfc;
+  --epis-ink: var(--color-text);
+  --epis-accent: var(--color-accent);
+
+  --epis-bg-base: var(--color-app-bg);
+  --epis-bg-canvas: var(--color-canvas-bg);
+  --epis-grid-line: var(--color-grid);
+
+  --epis-glass: var(--color-glass);
+  --epis-glass-hover: var(--color-glass-hover);
+  --epis-panel-border: var(--color-panel-border);
+  --epis-panel-shadow: var(--shadow-block);
+
+  --epis-font-sans: "Segoe UI", "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+  --epis-font-district: "Cormorant Garamond", "Noto Serif TC", Georgia, "Times New Roman", serif;
+
+  /* 全螢幕 HUD，須高於畫布與側欄（含 transform 子層） */
+  --epis-z-hud: 10000;
+
+  --epis-zone-wild-tint: var(--color-zone-wild-tint);
+  --epis-zone-instagram-tint: var(--color-zone-instagram-tint);
+  --epis-zone-youtube-tint: var(--color-zone-youtube-tint);
+  --epis-zone-musee-tint: var(--color-zone-musee-tint);
+
+  /* 全站字距微調 */
+  --epis-tracking: 0.05em;
+  /* 積木描邊：半透明白，非實色 */
+  --epis-brick-border-light: rgba(255, 255, 255, 0.3);
+  /* 城鎮磨砂壓克力／白瓷感 */
+  --epis-town-acrylic: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(248, 250, 252, 0.55) 45%,
+    rgba(240, 244, 248, 0.5) 100%
+  );
+  --epis-town-ao: inset 0 1px 0 rgba(255, 255, 255, 0.65), inset 0 -2px 6px rgba(90, 96, 102, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.03);
+}
