@@ -18,13 +18,13 @@ export const EXPERIENCE_DESTINATIONS: ExperienceDestinationRow[] = [
     key: "worldFocus",
     mode: "worldFocus",
     title: "專注",
-    subtitle: "focusView · 工作介面",
+    subtitle: "瞬時傳送",
   },
   {
     key: "auraWorld",
     mode: "auraWorld",
-    title: "Aura 場景",
-    subtitle: "空間場景 · 探索 World",
+    title: "Aura",
+    subtitle: "秘境探索",
   },
   { key: "locked", mode: null, title: "未知", subtitle: "尚未解鎖" },
 ];
@@ -33,7 +33,7 @@ export const EXPERIENCE_DESTINATIONS: ExperienceDestinationRow[] = [
 export const ISLE_DESTINATIONS = EXPERIENCE_DESTINATIONS;
 
 export const ENTRY_PATH_COPY = {
-  title: "返回起點",
+  title: "地圖",
   subtitle: "回到旅程開始畫面",
 } as const;
 

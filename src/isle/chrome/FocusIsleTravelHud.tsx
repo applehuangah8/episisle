@@ -76,7 +76,7 @@ export function FocusIsleTravelHud() {
             <motion.div
               id={menuId}
               role="listbox"
-              aria-label="切換體驗層或返回起點"
+              aria-label="切換體驗層或開啟地圖"
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -109,8 +109,11 @@ export function FocusIsleTravelHud() {
                     <span className="text-[12px] font-medium text-epis-ink/88">{row.title}</span>
                     <span className="text-[10px] text-epis-ink/48">{row.subtitle}</span>
                     {here ? (
-                      <span className="text-[9px] font-medium uppercase tracking-wider text-[var(--color-accent)]/90">
-                        目前所在
+                      <span className="inline-flex items-center gap-1 text-[9px] font-medium tracking-wide text-epis-ink/58">
+                        <span style={{ color: "#B2D8D8" }} aria-hidden>
+                          {"\u2660\uFE0E"}
+                        </span>
+                        <span>you are here</span>
                       </span>
                     ) : null}
                   </button>

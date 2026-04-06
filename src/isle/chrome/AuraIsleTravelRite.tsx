@@ -56,7 +56,7 @@ export function AuraIsleTravelRite() {
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-controls={panelId}
-          title="離港 · 航向"
+          title="時空機"
           className="group relative flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.1] text-[rgba(232,228,240,0.85)] shadow-[0_0_0_1px_rgba(255,252,248,0.04),0_12px_40px_-8px_rgba(0,0,0,0.5)] backdrop-blur-md transition"
           style={{
             background:
@@ -81,7 +81,7 @@ export function AuraIsleTravelRite() {
             <motion.div
               id={panelId}
               role="dialog"
-              aria-label="離港航向"
+              aria-label="時空機 · 航線"
               initial={{ opacity: 0, y: -8, filter: "blur(6px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
@@ -102,7 +102,7 @@ export function AuraIsleTravelRite() {
                   className="text-[10px] font-medium uppercase tracking-[0.42em]"
                   style={{ color: "rgba(200,196,218,0.38)" }}
                 >
-                  離港
+                  時空機
                 </p>
                 <p
                   className="mt-1 font-serif text-[15px] font-normal tracking-wide"
@@ -111,10 +111,10 @@ export function AuraIsleTravelRite() {
                     color: "rgba(245,240,252,0.9)",
                   }}
                 >
-                  航向何處
+                  航線
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed" style={{ color: "rgba(200,196,210,0.42)" }}>
-                  選一條靜靜的航線，或回到星圖重新揀選。
+                  選一條路徑，或自地圖重新出發。
                 </p>
               </div>
 
@@ -148,8 +148,14 @@ export function AuraIsleTravelRite() {
                           {row.title}
                         </span>
                         {here ? (
-                          <span className="shrink-0 text-[9px] tracking-widest" style={{ color: "rgba(200,180,220,0.55)" }}>
-                            在此港
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1 text-[9px] tracking-widest"
+                            style={{ color: "rgba(200,180,220,0.55)" }}
+                          >
+                            <span style={{ color: "#B2D8D8" }} aria-hidden>
+                              {"\u2660\uFE0E"}
+                            </span>
+                            <span>you are here</span>
                           </span>
                         ) : null}
                       </div>

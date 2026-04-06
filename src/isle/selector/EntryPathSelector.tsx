@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Box, DoorOpen, Lock } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import "./isleSelector.css";
 
@@ -11,71 +11,6 @@ export type EntryPathSelectorProps = {
   onChooseQuick: () => void;
   onChooseImmersive: () => void;
 };
-
-function EntryPathJourneyTitle({ fontFamily }: { fontFamily: string }) {
-  const rawId = useId().replace(/:/g, "");
-  const sheenGradId = `epis-entry-sheen-${rawId}`;
-  const titleFilterId = `epis-entry-flt-${rawId}`;
-
-  return (
-    <svg
-      className="entry-path-title-svg"
-      viewBox="0 0 380 40"
-      width="100%"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label="Start your journey"
-    >
-      <title>Start your journey</title>
-      <defs>
-        <filter id={titleFilterId} x="-25%" y="-35%" width="150%" height="170%">
-          <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodColor="rgba(0,0,0,0.42)" />
-          <feDropShadow dx="0" dy="3" stdDeviation="8" floodColor="rgba(8,6,12,0.45)" />
-        </filter>
-        <linearGradient
-          id={sheenGradId}
-          className="entry-path-title-svg-grad"
-          gradientUnits="userSpaceOnUse"
-          x1="-90"
-          y1="0"
-          x2="110"
-          y2="0"
-        >
-          <stop offset="0%" stopColor="rgb(237, 227, 215)" stopOpacity="0" />
-          <stop offset="40%" stopColor="rgb(240, 232, 220)" stopOpacity="0.12" />
-          <stop offset="49%" stopColor="rgb(252, 246, 236)" stopOpacity="0.38" />
-          <stop offset="50%" stopColor="rgb(255, 250, 242)" stopOpacity="0.48" />
-          <stop offset="51%" stopColor="rgb(248, 240, 228)" stopOpacity="0.32" />
-          <stop offset="60%" stopColor="rgb(236, 228, 216)" stopOpacity="0.1" />
-          <stop offset="100%" stopColor="rgb(237, 227, 215)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <text
-        className="entry-path-title-svg-text"
-        x="190"
-        y="26"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="#ede3d7"
-        filter={`url(#${titleFilterId})`}
-        style={{ fontFamily }}
-      >
-        Start your journey
-      </text>
-      <text
-        className="entry-path-title-svg-text entry-path-title-svg-shine"
-        x="190"
-        y="26"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill={`url(#${sheenGradId})`}
-        style={{ fontFamily }}
-      >
-        Start your journey
-      </text>
-    </svg>
-  );
-}
 
 type SlotId = "left" | "center" | "right";
 type RitualChoice = "quick" | "immersive";
@@ -466,13 +401,18 @@ export function EntryPathSelector({ onChooseQuick, onChooseImmersive }: EntryPat
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.12, duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="entry-path-caption-inner text-center">
-          <h1 className="entry-path-title entry-path-title-svg-host font-serif text-[clamp(1.32rem,3.5vw,1.78rem)] font-normal leading-snug tracking-[0.04em]">
-            <EntryPathJourneyTitle fontFamily="var(--epis-font-district), Georgia, serif" />
+        <div className="entry-path-caption-stack text-center">
+          <h1
+            className="entry-path-title font-serif text-[clamp(1.4rem,3.7vw,1.88rem)] font-normal leading-snug tracking-[0.04em]"
+            style={{ fontFamily: "var(--epis-font-district), Georgia, serif" }}
+          >
+            <span className="entry-path-title-wrap">
+              <span className="entry-path-title-core">Start your journey</span>
+            </span>
           </h1>
           <div className="entry-path-caption-rule" aria-hidden />
           <p
-            className="text-[11px] font-light leading-relaxed tracking-[0.22em] text-[rgba(245,242,252,0.58)]"
+            className="m-0 text-[11px] font-light leading-relaxed tracking-[0.22em] text-[rgba(245,242,252,0.58)]"
             style={{ textShadow: "0 1px 6px rgba(0,0,0,0.35)" }}
           >
             選擇進入方式

@@ -1,12 +1,31 @@
 import { useFrame, useThree } from "@react-three/fiber";
+import { EffectComposer, Select, Selection, SelectiveBloom } from "@react-three/postprocessing";
 import { OrbitControls, RoundedBox } from "@react-three/drei";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from "react";
 import * as THREE from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+
+import { IslandFloat } from "./AuraIslandFloat";
+import { AuraMagicalMistScenery } from "./AuraMagicalMistScenery";
+import { AuraIslandHoverScreenProjector } from "./AuraIslandHoverScreenProjector";
+import { CitadelToyStarRiver } from "./AuraStarRiver";
+import { auraIslandById } from "./auraWorldIslandTypes";
+import { AuraSelectableIsland, AuraWorldCameraFocus } from "./AuraWorldIslandKit";
+import { useAuraWorldSelection } from "./auraWorldSelectionStore";
 
 /** Warm spring shell — matches scene.background / FogExp2 */
 const SKY = "#F1F8E8";
 const FOG_COLOR = "#F1F8E8";
-const FOG_DENSITY = 0.011;
+const FOG_DENSITY = 0.00825;
 const PETAL_SKY_TINT = /* @__PURE__ */ new THREE.Color(SKY);
 const PETAL_HSL_TMP = { h: 0, s: 0, l: 0 };
 
@@ -20,6 +39,8 @@ const BLOB_MIST = "#6E94A6";
 const SLATE = "#4A5562";
 const HARBOR_WATER = "#4A6B82";
 const HARBOR_WATER_DEEP = "#2C4558";
+/** Lagoon glass tint — gradient partner for harbor teal */
+const HARBOR_LAKE_MINT = "#B2D8D8";
 const PIER_WOOD = "#8B7A62";
 const RESORT_CREAM = "#F4EDE2";
 const RESORT_SUN = "#E5C9A0";
@@ -273,38 +294,6 @@ function DioramaCameraRig() {
   return null;
 }
 
-function IslandFloat({
-  x,
-  y,
-  z,
-  speed,
-  phase,
-  amplitude,
-  children,
-}: {
-  x: number;
-  y: number;
-  z: number;
-  speed: number;
-  phase: number;
-  amplitude: number;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    const t = clock.elapsedTime;
-    ref.current.position.x = x;
-    ref.current.position.z = z;
-    ref.current.position.y = y + Math.sin(t * speed + phase) * amplitude;
-  });
-  return (
-    <group ref={ref} position={[x, y, z]}>
-      {children}
-    </group>
-  );
-}
-
 function IslandFloor({
   radius,
   color,
@@ -421,7 +410,105 @@ function RiverbedStoneRing({
   );
 }
 
+/** Radial mint → teal for lake surface albedo (pairs HARBOR_WATER + #B2D8D8). */
+function useHarborLakeGradientMap() {
+  return useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 92);
+    g.addColorStop(0, HARBOR_LAKE_MINT);
+    g.addColorStop(0.28, "#8EC9CA");
+    g.addColorStop(0.55, HARBOR_WATER);
+    g.addColorStop(1, HARBOR_WATER_DEEP);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    return tex;
+  }, []);
+}
+
+/**
+ * Harbor “second ring” — lake read: mint→teal gradient, wet spec (clearcoat), slow ripples.
+ * Avoids `transmission` here (fragile with layered transparent water + some GPUs); still uses
+ * MeshPhysicalMaterial with requested roughness / thickness feel via clearcoat + ior.
+ */
+function HarborLakePhysicalRing({ gradientMap }: { gradientMap: THREE.Texture | null }) {
+  const uWaterTime = useRef({ value: 0 });
+
+  const onBeforeCompile = useCallback((shader: { uniforms: { uWaterTime?: { value: number } }; fragmentShader: string }) => {
+    shader.uniforms.uWaterTime = uWaterTime.current;
+    shader.fragmentShader = `uniform float uWaterTime;\n${shader.fragmentShader}`.replace(
+      "#include <normal_fragment_maps>",
+      `#include <normal_fragment_maps>
+        {
+          vec2 wuv = vUv * 6.8;
+          float wt = uWaterTime * 0.38;
+          float r1 = sin(wuv.x * 13.5 + wt) * cos(wuv.y * 11.2 - wt * 0.72);
+          float r2 = sin(wuv.x * 20.0 - wt * 0.48) * sin(wuv.y * 16.5 + wt * 0.55);
+          float rip = r1 * 0.052 + r2 * 0.032;
+          float rip2 = sin(wuv.x * 28.0 + wuv.y * 24.0 + wt * 0.6) * 0.018;
+          normal = normalize(normal + vec3(rip + rip2, rip * 0.55 - rip2 * 0.8, 0.0));
+        }
+        `
+    );
+  }, []);
+
+  useFrame(({ clock }) => {
+    uWaterTime.current.value = clock.elapsedTime;
+  });
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
+      <planeGeometry args={[8.8, 7.6]} />
+      <meshPhysicalMaterial
+        map={gradientMap ?? undefined}
+        color="#eaf6f6"
+        roughness={0.1}
+        metalness={0}
+        transmission={0}
+        thickness={1.5}
+        ior={1.33}
+        transparent
+        opacity={0.94}
+        side={THREE.DoubleSide}
+        clearcoat={0.42}
+        clearcoatRoughness={0.12}
+        attenuationColor={HARBOR_LAKE_MINT}
+        attenuationDistance={2.4}
+        envMapIntensity={0.55}
+        onBeforeCompile={onBeforeCompile}
+      />
+    </mesh>
+  );
+}
+
+/** Inner harbor pond: rounded rectangle in XY → laid flat with rotation X = −π/2. */
+function createHarborInnerPondGeometry(width: number, depth: number, cornerR: number) {
+  const hw = width / 2;
+  const hh = depth / 2;
+  const r = Math.min(cornerR, hw * 0.92, hh * 0.92);
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw + r, -hh);
+  shape.lineTo(hw - r, -hh);
+  shape.absarc(hw - r, -hh + r, r, -Math.PI / 2, 0, false);
+  shape.lineTo(hw, hh - r);
+  shape.absarc(hw - r, hh - r, r, 0, Math.PI / 2, false);
+  shape.lineTo(-hw + r, hh);
+  shape.absarc(-hw + r, hh - r, r, Math.PI / 2, Math.PI, false);
+  shape.lineTo(-hw, -hh + r);
+  shape.absarc(-hw + r, -hh + r, r, Math.PI, Math.PI * 1.5, false);
+  return new THREE.ShapeGeometry(shape, 20);
+}
+
 function HarborWaterBody() {
+  const lakeGradient = useHarborLakeGradientMap();
+  const innerPondGeo = useMemo(() => createHarborInnerPondGeometry(5.5, 4.2, 0.52), []);
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -433,13 +520,9 @@ function HarborWaterBody() {
         <planeGeometry args={[10.5, 9.2]} />
         <meshStandardMaterial color={HARBOR_WATER_DEEP} roughness={0.95} metalness={0} transparent opacity={0.94} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
-        <planeGeometry args={[8.8, 7.6]} />
-        <meshStandardMaterial color={HARBOR_WATER} roughness={0.88} metalness={0} transparent opacity={0.52} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.045, 0]} receiveShadow>
-        <planeGeometry args={[5.5, 4.2]} />
-        <meshStandardMaterial color="#8CB4CC" roughness={0.78} metalness={0} transparent opacity={0.24} />
+      <HarborLakePhysicalRing gradientMap={lakeGradient} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.045, 0]} receiveShadow geometry={innerPondGeo}>
+        <meshStandardMaterial color="#8CB4CC" roughness={0.78} metalness={0} transparent opacity={0.34} />
       </mesh>
     </group>
   );
@@ -1159,11 +1242,14 @@ function Tree({
   scale = 1,
   canopyGeo,
   feltBump,
+  canopyColor = CANOPY,
 }: {
   position: [number, number, number];
   scale?: number;
   canopyGeo: THREE.LatheGeometry;
   feltBump: THREE.Texture | null;
+  /** Decorative tint (distant islets, groves). */
+  canopyColor?: string;
 }) {
   const trunkH = 0.56;
   return (
@@ -1174,7 +1260,7 @@ function Tree({
       </mesh>
       <mesh position={[0, trunkH, 0]} castShadow receiveShadow geometry={canopyGeo}>
         <meshStandardMaterial
-          color={CANOPY}
+          color={canopyColor}
           roughness={ROUGH}
           metalness={0}
           bumpMap={feltBump ?? undefined}
@@ -1367,6 +1453,48 @@ function ScatterFlowers({
     }
     return out;
   }, [seed, count, maxRadius, innerRadius]);
+
+  return (
+    <group>
+      {data.map((f, i) => (
+        <FeltFlower key={i} position={f.p} color={f.c} rotationY={f.ry} feltBump={feltBump} />
+      ))}
+    </group>
+  );
+}
+
+/** Tiny flower scatter with caller-defined palette (distant painterly islets). */
+function MicroIsletFlowerPatch({
+  seed,
+  count,
+  maxRadius,
+  innerRadius,
+  feltBump,
+  palette,
+}: {
+  seed: number;
+  count: number;
+  maxRadius: number;
+  innerRadius: number;
+  feltBump: THREE.Texture | null;
+  palette: string[];
+}) {
+  const paletteSig = palette.join("|");
+  const data = useMemo(() => {
+    const rnd = mulberry32(seed);
+    const out: { p: [number, number, number]; c: string; ry: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      const a = rnd() * Math.PI * 2;
+      const r = innerRadius + rnd() * (maxRadius - innerRadius);
+      const jitter = (rnd() - 0.5) * 0.07;
+      out.push({
+        p: [Math.cos(a) * r + jitter, 0.012, Math.sin(a) * r + jitter],
+        c: palette[Math.floor(rnd() * palette.length)]!,
+        ry: rnd() * Math.PI * 2,
+      });
+    }
+    return out;
+  }, [seed, count, maxRadius, innerRadius, paletteSig]);
 
   return (
     <group>
@@ -2512,6 +2640,79 @@ function IslandMatchaGround({ radius }: { radius: number }) {
   );
 }
 
+const ISLAND_SOFT_SHADOW_VS = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const ISLAND_SOFT_SHADOW_FS = /* glsl */ `
+varying vec2 vUv;
+uniform float uStrength;
+void main() {
+  vec2 p = vUv - vec2(0.5);
+  float d = length(p) * 2.0;
+  float core = 1.0 - smoothstep(0.04, 0.56, d);
+  float rim = (1.0 - smoothstep(0.38, 1.02, d)) * 0.58;
+  float a = clamp(core * 0.88 + rim, 0.0, 1.0) * uStrength;
+  vec3 rgb = vec3(0.14, 0.22, 0.19);
+  gl_FragColor = vec4(rgb, a);
+}
+`;
+
+/** Soft radial darkening on the matcha pad — contact-style shadow without blocking the map */
+function IslandUnderSoftShadow({
+  scaleX,
+  scaleZ,
+  y = 0.004,
+  strength = 0.26,
+}: {
+  scaleX: number;
+  scaleZ: number;
+  y?: number;
+  strength?: number;
+}) {
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: { uStrength: { value: strength } },
+        vertexShader: ISLAND_SOFT_SHADOW_VS,
+        fragmentShader: ISLAND_SOFT_SHADOW_FS,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -3,
+      }),
+    [],
+  );
+
+  useEffect(() => {
+    material.uniforms.uStrength.value = strength;
+  }, [material, strength]);
+
+  useEffect(() => {
+    return () => material.dispose();
+  }, [material]);
+
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, y, 0]}
+      scale={[scaleX, scaleZ, 1]}
+      renderOrder={-1}
+      castShadow={false}
+      receiveShadow={false}
+    >
+      <circleGeometry args={[1, 64]} />
+      <primitive object={material} attach="material" />
+    </mesh>
+  );
+}
+
 /** Plank bridge with parabolic sag + side rails (Harbor ↔ Anchor) */
 function HangingWoodBridge({
   ax,
@@ -2722,6 +2923,798 @@ function DistantMossIslets({
   );
 }
 
+/** Flower mixes — warm/cool accents (painterly ref: lemon, coral, lavender, mint). */
+const LEFT_MICRO_FLORA_WARM = ["#EEDC82", "#F4D58D", "#F5C878", "#E8A598", "#F0B8B0"];
+const LEFT_MICRO_FLORA_MIX = ["#E8B4D4", "#D4A5C7", "#C9E86C", "#E0C896", "#F2D4A8", "#B8E8D4"];
+const LEFT_MICRO_FLORA_SOFT = ["#F4E8B8", "#E8C4C4", "#D8C4E8", "#C8E6D8"];
+
+/** Decorative archipelago: uniform scale vs. first build. */
+const LEFT_ARCHIPELAGO_SCALE = 1.3;
+
+/**
+ * Bulk nudge toward default `DioramaCameraRig` eye — keeps cluster readable as “closer / left vignette”.
+ * Individual islets add jitter on top (less grid-like).
+ */
+const LEFT_ARCH_TO_CAMERA: [number, number, number] = [1.78, 0.22, 0.38];
+
+/**
+ * Shift cluster toward playable harbor (leftmost isle, see `AURA_WORLD_ISLANDS` / harbor `position`).
+ * World: ~+X, slightly −Z from this cloudside band.
+ */
+const LEFT_ARCH_TOWARD_HARBOR: [number, number, number] = [2.55, 0.09, -1];
+
+/** Island puck bases — plum / slate blue / sand / lavender / navy / dusty rose (palette ref). */
+const LEFT_BASE_A = "#6B5C78";
+const LEFT_BASE_B = "#4F6582";
+const LEFT_BASE_C = "#C4A07A";
+const LEFT_BASE_D = "#8A7D96";
+const LEFT_BASE_E = "#3A4F62";
+const LEFT_BASE_F = "#916D72";
+
+/**
+ * Flora for {@link DistantLeftForegroundRomanticPlate} — ref: soft garden mist;
+ * coral-peach + lavender + muted yellow-green + cream on dusty blue ground (no neon).
+ */
+const LEFT_ROMANTIC_MEGA_FLORA = [
+  "#E8B8AC",
+  "#E5C8BC",
+  "#D8C8DC",
+  "#C8B6CE",
+  "#C8D0B0",
+  "#B8C89C",
+  "#F0ECE4",
+  "#E8E4DC",
+  "#B8D0CC",
+  "#A8C0CC",
+];
+
+/** Puck rim gradient: deep blue-grey anchor → dusty blue → misty cream (painterly ref). */
+const LEFT_ROMANTIC_BASE_GRADIENT_BOTTOM_UP = [
+  "#2F3F4A",
+  "#4F6572",
+  "#7390A0",
+  "#9DB4C4",
+  "#C8DAE8",
+] as const;
+
+/** Terraced “plaza pad” for distant urban decor — flatter center, softer rim. */
+function urbanHillY(u: number, w: number): number {
+  const r = Math.sqrt(u * u + w * w);
+  if (r < 1e-5) return 0;
+  const theta = Math.atan2(w, u);
+  const waveR =
+    1 +
+    0.034 * Math.sin(theta * 2.5 + 0.95) +
+    0.022 * Math.sin(theta * 5.2 - 0.4) +
+    0.012 * Math.sin(theta * 8 + 0.5);
+  const inside = r / waveR;
+  const softEdge = inside <= 1 ? Math.pow(Math.max(0, 1 - inside), 0.56) : 0;
+  const plaza = Math.exp(-((u - 0.12) ** 2 + (w + 0.08) ** 2) * 2.85) * 0.038;
+  const roll =
+    0.052 * Math.sin(u * 3.4 + w * 1.1) + 0.038 * Math.cos(u * 1.6 - w * 2.5 + 0.6) + plaza;
+  let y = softEdge * roll;
+  if (inside > 1.03) y -= 0.2 * Math.min(0.72, inside - 1.03);
+  return y;
+}
+
+function buildUrbanHillPlane(rx: number, rz: number, segX: number, segZ: number): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(rx * 2, rz * 2, segX, segZ);
+  geo.rotateX(-Math.PI / 2);
+  const attr = geo.attributes.position as THREE.BufferAttribute;
+  const tmp = new THREE.Vector3();
+  for (let i = 0; i < attr.count; i++) {
+    tmp.fromBufferAttribute(attr, i);
+    tmp.y = urbanHillY(tmp.x / rx, tmp.z / rz);
+    attr.setXYZ(i, tmp.x, tmp.y, tmp.z);
+  }
+  attr.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Large elliptical romantic islet — sits in front of {@link DistantLeftCloudsideMicroIslet} (toward camera),
+ * nudged slightly left for depth stagger; same LEFT_BASE / flora palette language.
+ */
+function DistantLeftForegroundRomanticPlate({
+  canopyGeo,
+  feltBump,
+}: {
+  canopyGeo: THREE.LatheGeometry;
+  feltBump: THREE.Texture | null;
+}) {
+  const bump = feltBump ?? undefined;
+  const [tcx, tcy, tcz] = LEFT_ARCH_TO_CAMERA;
+  const [hx, hy, hz] = LEFT_ARCH_TOWARD_HARBOR;
+  const tx = tcx + hx;
+  const ty = tcy + hy;
+  const tz = tcz + hz;
+  /* 更左 −6；略往鏡頭與右側 (+x / +z) */
+  const px = -16.35 + tx + 3.45 - 1.35 - 6 - 4.175 + 2.35;
+  const py = -0.048 + ty - 0.028 - 0.07;
+  const pz = 9.72 + tz + 0.92 - 1.05 - 2.3 + 1.15;
+
+  /** Puck top (cylinder at y=-0.072, height 0.12); no separate hill plane mesh. */
+  const surfaceY = -0.011;
+
+  const romanticPuckSideMap = useMemo(() => {
+    const w = 8;
+    const h = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const g = ctx.createLinearGradient(0, h, 0, 0);
+      const stops = LEFT_ROMANTIC_BASE_GRADIENT_BOTTOM_UP;
+      const n = stops.length;
+      for (let i = 0; i < n; i++) {
+        g.addColorStop(i / Math.max(1, n - 1), stops[i]!);
+      }
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    return tex;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      romanticPuckSideMap.dispose();
+    };
+  }, [romanticPuckSideMap]);
+
+  const puckScale = 0.8 * 4.05;
+  const puckColor = "#7391AF";
+  /** Light mist in same blue-grey family as `puckColor` for soft bloom. */
+  const puckEmissive = "#B8CADA";
+
+  return (
+    <group position={[px, py, pz]} rotation={[0, 0.33, 0]} scale={puckScale}>
+      <Select enabled>
+        <mesh position={[0, -0.072, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.98, 0.9, 0.12, 36]} />
+          <meshStandardMaterial
+            attach="material-0"
+            map={romanticPuckSideMap}
+            color={puckColor}
+            emissive={puckEmissive}
+            emissiveIntensity={0.24}
+            roughness={0.86}
+            metalness={0}
+            bumpMap={bump}
+            bumpScale={0.01}
+          />
+          <meshStandardMaterial
+            attach="material-1"
+            color={puckColor}
+            emissive={puckEmissive}
+            emissiveIntensity={0.32}
+            roughness={0.9}
+            metalness={0.02}
+            bumpMap={bump}
+            bumpScale={0.012}
+          />
+          <meshStandardMaterial attach="material-2" color="#3A4A58" roughness={0.92} metalness={0.02} />
+        </mesh>
+      </Select>
+
+      <Tree
+        position={[-0.38, surfaceY, 0.08]}
+        scale={0.34}
+        canopyGeo={canopyGeo}
+        feltBump={feltBump}
+        canopyColor="#5C6F68"
+      />
+      <Tree
+        position={[0.35, surfaceY, -0.12]}
+        scale={0.3}
+        canopyGeo={canopyGeo}
+        feltBump={feltBump}
+        canopyColor="#687C74"
+      />
+      <Tree position={[0.05, surfaceY, 0.32]} scale={0.26} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#738A82" />
+      <Tree
+        position={[-0.22, surfaceY, -0.28]}
+        scale={0.22}
+        canopyGeo={canopyGeo}
+        feltBump={feltBump}
+        canopyColor="#5A6E66"
+      />
+
+      <PuddingRock position={[-0.48, surfaceY + 0.02, -0.32]} scale={[0.55, 0.38, 0.52]} color="#9D92A8" />
+      <PuddingRock position={[0.42, surfaceY + 0.018, 0.28]} scale={[0.48, 0.34, 0.46]} color="#C8B8AC" />
+      <PuddingRock position={[0.18, surfaceY + 0.016, -0.38]} scale={[0.5, 0.36, 0.48]} color="#7C8790" />
+      <PuddingRock position={[-0.12, surfaceY + 0.015, 0.42]} scale={[0.38, 0.28, 0.4]} color="#DCD2C8" />
+
+      <group position={[0, surfaceY + 0.014, 0]}>
+        <MicroIsletFlowerPatch
+          seed={44100}
+          count={54}
+          maxRadius={1.05}
+          innerRadius={0.16}
+          feltBump={feltBump}
+          palette={LEFT_ROMANTIC_MEGA_FLORA}
+        />
+      </group>
+
+      <group position={[0.28, surfaceY + 0.3, -0.06]} scale={0.38} rotation={[0, -0.4, 0]}>
+        <SoftCloudletCluster position={[0, 0, 0]} scale={1} seed={44101} palette="plate" />
+        <SoftCloudletCluster position={[-0.22, -0.08, 0.14]} scale={0.62} rotation={[0, 0.5, 0]} seed={44102} palette="mist" />
+      </group>
+    </group>
+  );
+}
+
+/**
+ * Restrained urban palette — low chroma, lower lightness, stone / zinc / graphite undertones.
+ */
+const URBAN_PRISM_PALETTE = {
+  lavenderMist: "#C5C2C9",
+  peachBlush: "#ADA09D",
+  roseDust: "#938588",
+  dandelion: "#A8A591",
+  ochreSand: "#9E8F7D",
+  seafoam: "#8A958E",
+  warmTan: "#969084",
+  slateBlue: "#6E7B87",
+  offWhite: "#C5C3C0",
+  canalMuted: "#798690",
+  waxFacade: "#B5AFA0",
+  blockBlue: "#5C6778",
+  paleMist: "#8B929C",
+} as const;
+
+/** Distant “CBD” islet — desaturated massing, matte + slight specular on cool volumes. */
+const URBAN_ISLE_TURF = "#667286";
+const URBAN_TREE_TEAL = "#345458";
+const URBAN_TREE_OLIVE = "#4A4840";
+const URBAN_BLD_ROUGH = 0.94;
+const URBAN_BLD_METAL_MATTE = 0.06;
+const URBAN_BLD_METAL_COOL = 0.11;
+
+function DistantRightBackUrbanDecorIsle({
+  canopyGeo,
+  feltBump,
+}: {
+  canopyGeo: THREE.LatheGeometry;
+  feltBump: THREE.Texture | null;
+}) {
+  const bump = feltBump ?? undefined;
+  const hillRx = 1.08 * 1.36;
+  const hillRz = 1.08 * 0.76;
+  const urbanHillGeo = useMemo(() => buildUrbanHillPlane(hillRx, hillRz, 70, 70), [hillRx, hillRz]);
+  const lu = (lx: number, lz: number) => urbanHillY(lx / hillRx, lz / hillRz);
+
+  /** Soft rim only — no color gradient on albedo */
+  const urbanIsleAlpha = useMemo(() => {
+    const size = 256;
+    const c = size / 2;
+    const ellAspect = hillRx / Math.max(hillRz, 1e-6);
+    const ac = document.createElement("canvas");
+    ac.width = size;
+    ac.height = size;
+    const ax = ac.getContext("2d");
+    if (ax) {
+      ax.save();
+      ax.translate(c, c);
+      ax.scale(ellAspect, 1);
+      const g = ax.createRadialGradient(0, 0, c * 0.03, 0, 0, c * 0.87);
+      g.addColorStop(0, "#ffffff");
+      g.addColorStop(0.48, "#f0f2f5");
+      g.addColorStop(0.74, "#8896a4");
+      g.addColorStop(0.9, "#2a3036");
+      g.addColorStop(1, "#000000");
+      ax.fillStyle = g;
+      ax.beginPath();
+      ax.arc(0, 0, c * 0.87, 0, Math.PI * 2);
+      ax.fill();
+      ax.restore();
+    }
+    const tex = new THREE.CanvasTexture(ac);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.needsUpdate = true;
+    return tex;
+  }, [hillRx, hillRz]);
+
+  useEffect(() => {
+    return () => {
+      urbanHillGeo.dispose();
+      urbanIsleAlpha.dispose();
+    };
+  }, [urbanHillGeo, urbanIsleAlpha]);
+
+  /* Deeper scene (−z) + screen-right (+x); still recessed from camera */
+  const s = 2.68;
+  const bx = 9.05;
+  const by = -0.051;
+  const bz = -10.35;
+
+  const pal = URBAN_PRISM_PALETTE;
+  const rM = URBAN_BLD_ROUGH;
+  const m0 = URBAN_BLD_METAL_MATTE;
+  const m1 = URBAN_BLD_METAL_COOL;
+
+  return (
+    <group position={[bx, by, bz]} rotation={[0, -0.66, 0]} scale={s}>
+      <mesh geometry={urbanHillGeo} position={[0, 0.011, 0]} castShadow receiveShadow>
+        <meshStandardMaterial
+          color={URBAN_ISLE_TURF}
+          alphaMap={urbanIsleAlpha}
+          transparent
+          roughness={0.96}
+          metalness={0.04}
+          bumpMap={bump}
+          bumpScale={0.008}
+        />
+      </mesh>
+
+      <mesh position={[0, -0.064, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.9, 0.82, 0.1, 32]} />
+        <meshStandardMaterial attach="material-0" color="#4F5660" roughness={0.93} metalness={0.08} bumpMap={bump} bumpScale={0.005} />
+        <meshStandardMaterial attach="material-1" color={URBAN_ISLE_TURF} roughness={0.92} metalness={0.05} />
+        <meshStandardMaterial attach="material-2" color="#3E444C" roughness={0.95} metalness={0.05} />
+      </mesh>
+
+      {/* Canal — subdued reflective plane */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0.08]}
+        position={[-0.06, 0.038 + lu(-0.06, -0.02), -0.02]}
+        scale={[0.62, 1, 0.1]}
+        receiveShadow
+      >
+        <planeGeometry args={[1, 1]} />
+        <meshStandardMaterial
+          color={pal.canalMuted}
+          roughness={0.72}
+          metalness={0.12}
+          transparent
+          opacity={0.48}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Faceted prism tower (tri prism) + cap */}
+      <mesh
+        position={[-0.36, 0.31 + lu(-0.36, 0.06), 0.08]}
+        rotation={[0, 0.18, 0]}
+        castShadow
+        receiveShadow
+      >
+        <cylinderGeometry args={[0.14, 0.11, 0.6, 3]} />
+        <meshStandardMaterial color={pal.waxFacade} roughness={rM} metalness={m0} flatShading />
+      </mesh>
+      <mesh position={[-0.36, 0.68 + lu(-0.36, 0.06), 0.08]} rotation={[0, 0.18, 0.12]} castShadow receiveShadow>
+        <octahedronGeometry args={[0.1, 0]} />
+        <meshStandardMaterial color={pal.paleMist} roughness={0.88} metalness={m1} flatShading />
+      </mesh>
+
+      {/* Tall stacked mass — cool zinc / glass read */}
+      <mesh
+        position={[0.28, 0.42 + lu(0.28, -0.1), -0.12]}
+        rotation={[0, -0.28, 0]}
+        scale={[0.92, 1.22, 0.78]}
+        castShadow
+        receiveShadow
+      >
+        <octahedronGeometry args={[0.19, 0]} />
+        <meshStandardMaterial color={pal.blockBlue} roughness={0.86} metalness={m1} flatShading />
+      </mesh>
+      <mesh position={[0.28, 0.78 + lu(0.28, -0.1), -0.12]} rotation={[0.1, -0.28, 0.06]} castShadow receiveShadow>
+        <tetrahedronGeometry args={[0.11, 0]} />
+        <meshStandardMaterial color={pal.roseDust} roughness={rM} metalness={m0} flatShading />
+      </mesh>
+
+      {/* Wide plinth + roof */}
+      <RoundedBox
+        args={[0.46, 0.2, 0.28]}
+        radius={0.04}
+        smoothness={4}
+        position={[0.04, 0.1 + lu(0.04, 0.16), 0.18]}
+        rotation={[0, 0.06, 0]}
+        castShadow
+        receiveShadow
+      >
+        <meshStandardMaterial color={pal.peachBlush} roughness={rM} metalness={m0} bumpMap={bump} bumpScale={0.006} />
+      </RoundedBox>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.04, 0.208 + lu(0.04, 0.16), 0.18]} receiveShadow>
+        <circleGeometry args={[0.18, 20]} />
+        <meshStandardMaterial color={pal.offWhite} roughness={0.9} metalness={m0} />
+      </mesh>
+
+      {/* Low prism wedge */}
+      <RoundedBox
+        args={[0.22, 0.14, 0.34]}
+        radius={0.025}
+        smoothness={3}
+        position={[-0.08, 0.07 + lu(-0.08, -0.2), -0.22]}
+        rotation={[0, 0.42, 0]}
+        castShadow
+        receiveShadow
+      >
+        <meshStandardMaterial color={pal.paleMist} roughness={0.9} metalness={m1} />
+      </RoundedBox>
+
+      <mesh position={[0.22, 0.11 + lu(0.22, 0.1), 0.22]} rotation={[0, 0.45, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.09, 0.12, 0.24, 4]} />
+        <meshStandardMaterial color={pal.blockBlue} roughness={0.87} metalness={m1} flatShading />
+      </mesh>
+
+      {/* Extra prisms / blocks */}
+      <mesh position={[-0.2, 0.2 + lu(-0.2, -0.32), -0.28]} rotation={[0, -0.4, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.1, 0.08, 0.48, 4]} />
+        <meshStandardMaterial color={pal.dandelion} roughness={rM} metalness={m0} flatShading />
+      </mesh>
+      <mesh position={[0.42, 0.25 + lu(0.42, -0.06), 0.02]} rotation={[0.1, 0.45, -0.06]} castShadow receiveShadow>
+        <boxGeometry args={[0.16, 0.38, 0.14]} />
+        <meshStandardMaterial color={pal.paleMist} roughness={0.9} metalness={m1} />
+      </mesh>
+      <mesh position={[-0.5, 0.18 + lu(-0.5, 0.18), -0.12]} rotation={[0, 0.78, 0]} castShadow receiveShadow>
+        <octahedronGeometry args={[0.1, 0]} />
+        <meshStandardMaterial color={pal.waxFacade} roughness={rM} metalness={m0} flatShading />
+      </mesh>
+      <RoundedBox
+        args={[0.18, 0.32, 0.16]}
+        radius={0.022}
+        smoothness={3}
+        position={[0.12, 0.16 + lu(0.12, -0.26), -0.3]}
+        rotation={[0, -0.22, 0]}
+        castShadow
+        receiveShadow
+      >
+        <meshStandardMaterial color={pal.seafoam} roughness={rM} metalness={m0} />
+      </RoundedBox>
+
+      {/* Micro blocks — wax / blockBlue / paleMist */}
+      <group position={[-0.32, lu(-0.32, 0.24), 0.26]} rotation={[0, 0.28, 0]}>
+        <mesh position={[0, 0.065, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.14, 0.13, 0.11]} />
+          <meshStandardMaterial color={pal.waxFacade} roughness={rM} metalness={m0} />
+        </mesh>
+        <mesh position={[0, 0.145, 0]} rotation={[0, Math.PI / 4, 0]} castShadow receiveShadow>
+          <coneGeometry args={[0.1, 0.09, 4]} />
+          <meshStandardMaterial color={pal.blockBlue} roughness={0.88} metalness={m1} flatShading />
+        </mesh>
+      </group>
+      <group position={[0.32, lu(0.32, 0.22), -0.14]} rotation={[0, -0.45, 0]}>
+        <mesh position={[0, 0.055, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.11, 0.1, 0.13]} />
+          <meshStandardMaterial color={pal.blockBlue} roughness={0.87} metalness={m1} />
+        </mesh>
+        <mesh position={[0, 0.118, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.13, 0.05, 0.15]} />
+          <meshStandardMaterial color={pal.paleMist} roughness={0.9} metalness={m1} />
+        </mesh>
+      </group>
+      <group position={[-0.03, lu(-0.03, -0.34), 0.05]} rotation={[0, 0.14, 0]}>
+        <mesh position={[0, 0.053, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.12, 0.1, 0.12]} />
+          <meshStandardMaterial color={pal.paleMist} roughness={0.9} metalness={m1} />
+        </mesh>
+        <mesh position={[0, 0.118, 0]} rotation={[0, 0.16, 0]} castShadow receiveShadow>
+          <coneGeometry args={[0.085, 0.078, 4]} />
+          <meshStandardMaterial color={pal.waxFacade} roughness={rM} metalness={m0} flatShading />
+        </mesh>
+      </group>
+      <group position={[0.46, lu(0.46, 0.18), -0.2]} rotation={[0, 0.58, 0]}>
+        <mesh position={[0, 0.048, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.1, 0.09, 0.1]} />
+          <meshStandardMaterial color={pal.waxFacade} roughness={rM} metalness={m0} />
+        </mesh>
+        <mesh position={[0, 0.104, -0.02]} rotation={[0.12, 0, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.11, 0.038, 0.12]} />
+          <meshStandardMaterial color={pal.paleMist} roughness={0.9} metalness={m1} />
+        </mesh>
+      </group>
+
+      <HarborPalm position={[0.5, lu(0.5, 0.12) + 0.02, 0.1]} scale={0.64} rotY={-1} />
+
+      <Tree
+        position={[-0.44, lu(-0.44, -0.08), -0.08]}
+        scale={0.2}
+        canopyGeo={canopyGeo}
+        feltBump={feltBump}
+        canopyColor={URBAN_TREE_TEAL}
+      />
+
+      {/* Olive / scrub — stacked cones, muted */}
+      <group position={[0.08, 0, -0.38]}>
+        <mesh position={[0, 0.12 + lu(0.08, -0.38), 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.022, 0.028, 0.2, 6]} />
+          <meshStandardMaterial color="#454238" roughness={0.94} metalness={0} />
+        </mesh>
+        <mesh position={[0, 0.28 + lu(0.08, -0.38), 0]} castShadow receiveShadow>
+          <coneGeometry args={[0.1, 0.2, 6]} />
+          <meshStandardMaterial color={URBAN_TREE_OLIVE} roughness={0.9} metalness={0} flatShading />
+        </mesh>
+        <mesh position={[0, 0.38 + lu(0.08, -0.38), 0.02]} rotation={[0.08, 0.35, 0]} castShadow receiveShadow>
+          <coneGeometry args={[0.065, 0.12, 5]} />
+          <meshStandardMaterial color={URBAN_TREE_OLIVE} roughness={0.9} metalness={0} flatShading />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+/**
+ * Cluster of decorative micro-islets west of the left mist orbs — varied shapes, greens, water, stones, flora.
+ * (No interaction; visual only.)
+ */
+function DistantLeftCloudsideMicroIslet({
+  canopyGeo,
+  feltBump,
+}: {
+  canopyGeo: THREE.LatheGeometry;
+  feltBump: THREE.Texture | null;
+}) {
+  const bump = feltBump ?? undefined;
+  const [tcx, tcy, tcz] = LEFT_ARCH_TO_CAMERA;
+  const [hx, hy, hz] = LEFT_ARCH_TOWARD_HARBOR;
+  const tx = tcx + hx;
+  const ty = tcy + hy;
+  const tz = tcz + hz;
+  /* Same anchor as {@link DistantLeftForegroundRomanticPlate} — place micro D on its screen-right, nearer camera */
+  const ROMANTIC_PLATE_RY = 0.33;
+  const plateCx = -16.35 + tx + 3.45 - 1.35 - 6 - 4.175 + 2.35;
+  const plateCy = -0.048 + ty - 0.028 - 0.07;
+  const plateCz = 9.72 + tz + 0.92 - 1.05 - 2.3 + 1.15;
+  const edgeAlong = 4.05;
+  const edgeSide = 0.42;
+  const camNudgeX = 0.48;
+  const dEdgeX =
+    plateCx +
+    Math.cos(ROMANTIC_PLATE_RY) * edgeAlong -
+    Math.sin(ROMANTIC_PLATE_RY) * edgeSide +
+    camNudgeX;
+  const dEdgeZ =
+    plateCz + Math.sin(ROMANTIC_PLATE_RY) * edgeAlong + Math.cos(ROMANTIC_PLATE_RY) * edgeSide + 0.22;
+  const dEdgeY = plateCy - 0.014;
+
+  return (
+    <>
+      {/* A — round: mint turf, teal pond, three green canopies */}
+      <group
+        position={[-19.42 + tx + 0.52, -0.052 + ty - 0.008, 10.58 + tz - 0.58]}
+        rotation={[0, 0.38 + 0.12, 0]}
+        scale={LEFT_ARCHIPELAGO_SCALE}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.009, 0]} castShadow receiveShadow>
+          <circleGeometry args={[0.5, 26]} />
+          <meshStandardMaterial color="#B8D4C4" roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.028} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.11, 0.011, -0.07]} receiveShadow>
+          <circleGeometry args={[0.2, 18]} />
+          <meshStandardMaterial color="#9FD4DE" roughness={0.38} metalness={0} transparent opacity={0.82} />
+        </mesh>
+        <mesh position={[0, -0.05, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.48, 0.44, 0.1, 22]} />
+          <meshStandardMaterial color={LEFT_BASE_A} roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.022} />
+        </mesh>
+        <PuddingRock position={[-0.32, 0.02, -0.08]} scale={[0.55, 0.42, 0.5]} color="#9BA8B0" />
+        <PuddingRock position={[0.28, 0.018, 0.12]} scale={[0.42, 0.36, 0.44]} color="#8E8B9E" />
+        <PuddingRock position={[0.06, 0.015, 0.32]} scale={[0.38, 0.32, 0.4]} color="#C4B8A8" />
+        <Tree
+          position={[-0.24, 0, 0.14]}
+          scale={0.23}
+          canopyGeo={canopyGeo}
+          feltBump={feltBump}
+          canopyColor="#4A6248"
+        />
+        <Tree
+          position={[0.2, 0, -0.18]}
+          scale={0.19}
+          canopyGeo={canopyGeo}
+          feltBump={feltBump}
+          canopyColor="#587A54"
+        />
+        <Tree
+          position={[0.04, 0, 0.26]}
+          scale={0.16}
+          canopyGeo={canopyGeo}
+          feltBump={feltBump}
+          canopyColor="#6B8F72"
+        />
+        <MicroIsletFlowerPatch
+          seed={44021}
+          count={11}
+          maxRadius={0.42}
+          innerRadius={0.08}
+          feltBump={feltBump}
+          palette={LEFT_MICRO_FLORA_MIX}
+        />
+      </group>
+
+      {/* B — oval + meandering creek strips */}
+      <group
+        position={[-18.12 + tx - 0.68, -0.048 + ty + 0.006, 11.82 + tz + 0.35]}
+        rotation={[0, -0.25 - 0.18, 0]}
+        scale={LEFT_ARCHIPELAGO_SCALE}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[1.12, 1, 0.72]} position={[0, 0.009, 0]} castShadow receiveShadow>
+          <circleGeometry args={[0.41, 24]} />
+          <meshStandardMaterial color="#9BB89E" roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.03} />
+        </mesh>
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0.55]}
+          position={[0.06, 0.0105, 0.04]}
+          scale={[0.52, 1, 0.16]}
+          receiveShadow
+        >
+          <planeGeometry args={[1, 1]} />
+          <meshStandardMaterial color="#8ECAE6" roughness={0.34} metalness={0} transparent opacity={0.78} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh
+          rotation={[-Math.PI / 2, 0, -0.35]}
+          position={[-0.08, 0.0098, -0.1]}
+          scale={[0.36, 1, 0.12]}
+          receiveShadow
+        >
+          <planeGeometry args={[1, 1]} />
+          <meshStandardMaterial color="#A8D4E6" roughness={0.36} metalness={0} transparent opacity={0.72} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh position={[0, -0.046, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.4, 0.36, 0.09, 20]} />
+          <meshStandardMaterial color={LEFT_BASE_B} roughness={ROUGH} metalness={0} />
+        </mesh>
+        <Tree
+          position={[-0.16, 0, -0.1]}
+          scale={0.2}
+          canopyGeo={canopyGeo}
+          feltBump={feltBump}
+          canopyColor="#4F6A50"
+        />
+        <Tree position={[0.14, 0, 0.12]} scale={0.17} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#5C7A5E" />
+        <PuddingRock position={[0.22, 0.016, -0.2]} scale={[0.48, 0.34, 0.46]} color="#7D6B8A" />
+        <MicroIsletFlowerPatch
+          seed={44022}
+          count={9}
+          maxRadius={0.36}
+          innerRadius={0.06}
+          feltBump={feltBump}
+          palette={LEFT_MICRO_FLORA_WARM}
+        />
+      </group>
+
+      {/* C — bright grass, deep teal pool, one bold tree */}
+      <group
+        position={[-20.48 + tx + 0.28, -0.056 + ty - 0.004, 9.32 + tz + 0.72]}
+        rotation={[0, 0.52 - 0.22, 0]}
+        scale={LEFT_ARCHIPELAGO_SCALE}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.009, 0]} castShadow receiveShadow>
+          <circleGeometry args={[0.34, 22]} />
+          <meshStandardMaterial color="#C9E8D0" roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.026} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-0.08, 0.011, 0.06]} receiveShadow>
+          <circleGeometry args={[0.17, 16]} />
+          <meshStandardMaterial color="#6BA3B8" roughness={0.32} metalness={0.02} transparent opacity={0.85} />
+        </mesh>
+        <mesh position={[0, -0.052, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.32, 0.29, 0.095, 18]} />
+          <meshStandardMaterial color={LEFT_BASE_C} roughness={ROUGH} metalness={0} />
+        </mesh>
+        <Tree
+          position={[0.1, 0, -0.05]}
+          scale={0.27}
+          canopyGeo={canopyGeo}
+          feltBump={feltBump}
+          canopyColor="#3D5540"
+        />
+        <PuddingRock position={[-0.2, 0.014, 0.14]} scale={[0.44, 0.3, 0.4]} color="#6B7C88" />
+        <MicroIsletFlowerPatch
+          seed={44023}
+          count={14}
+          maxRadius={0.3}
+          innerRadius={0.04}
+          feltBump={feltBump}
+          palette={LEFT_MICRO_FLORA_WARM}
+        />
+      </group>
+
+      {/* D — tiny puff: parked at romantic plate right / camera-ward edge to break hard card silhouette */}
+      <group
+        position={[dEdgeX, dEdgeY, dEdgeZ]}
+        rotation={[0, ROMANTIC_PLATE_RY + 0.85, 0]}
+        scale={LEFT_ARCHIPELAGO_SCALE * 1.14}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]} castShadow receiveShadow>
+          <circleGeometry args={[0.2, 18]} />
+          <meshStandardMaterial color="#A8CFB8" roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.032} />
+        </mesh>
+        <mesh position={[0, -0.038, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.19, 0.17, 0.065, 14]} />
+          <meshStandardMaterial color={LEFT_BASE_D} roughness={ROUGH} metalness={0} />
+        </mesh>
+        <Tree position={[-0.05, 0, 0.04]} scale={0.13} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#5A7058" />
+        <Tree position={[0.06, 0, -0.05]} scale={0.11} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#4D644C" />
+        <MicroIsletFlowerPatch
+          seed={44024}
+          count={16}
+          maxRadius={0.16}
+          innerRadius={0.02}
+          feltBump={feltBump}
+          palette={LEFT_MICRO_FLORA_SOFT}
+        />
+      </group>
+
+      {/* E — wide ellipse, long water strip + sky-blue puddle */}
+      <group
+        position={[-20.88 + tx + 0.62, -0.054 + ty - 0.005, 11.38 + tz + 0.28]}
+        rotation={[0, 0.15 - 0.28, 0]}
+        scale={LEFT_ARCHIPELAGO_SCALE}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[1.18, 1, 0.8]} position={[0, 0.009, 0]} castShadow receiveShadow>
+          <circleGeometry args={[0.4, 24]} />
+          <meshStandardMaterial color="#7A9B7E" roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.027} />
+        </mesh>
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0.22]}
+          position={[0.02, 0.0108, 0]}
+          scale={[0.2, 1, 1.02]}
+          receiveShadow
+        >
+          <planeGeometry args={[1, 1]} />
+          <meshStandardMaterial color="#7EB8C9" roughness={0.33} metalness={0} transparent opacity={0.8} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-0.14, 0.011, 0.18]} receiveShadow>
+          <circleGeometry args={[0.11, 14]} />
+          <meshStandardMaterial color="#B8E0F0" roughness={0.35} metalness={0} transparent opacity={0.76} />
+        </mesh>
+        <mesh position={[0, -0.05, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.39, 0.35, 0.088, 20]} />
+          <meshStandardMaterial color={LEFT_BASE_E} roughness={ROUGH} metalness={0} />
+        </mesh>
+        <Tree position={[0.18, 0, -0.12]} scale={0.19} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#4A5F48" />
+        <Tree position={[-0.16, 0, 0.1]} scale={0.16} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#5D7A5C" />
+        <PuddingRock position={[0.12, 0.015, 0.22]} scale={[0.4, 0.28, 0.38]} color="#8B7FA0" />
+        <PuddingRock position={[-0.22, 0.012, -0.14]} scale={[0.36, 0.26, 0.34]} color="#9A8E78" />
+        <MicroIsletFlowerPatch
+          seed={44025}
+          count={10}
+          maxRadius={0.35}
+          innerRadius={0.07}
+          feltBump={feltBump}
+          palette={LEFT_MICRO_FLORA_MIX}
+        />
+      </group>
+
+      {/* F — skewed pad, rock-forward, sparse trees */}
+      <group
+        position={[-18.98 + tx - 0.55, -0.047 + ty + 0.004, 8.72 + tz + 0.62]}
+        rotation={[0, -0.55 + 0.14, 0]}
+        scale={LEFT_ARCHIPELAGO_SCALE}
+      >
+        <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[0.88, 1, 1.14]} position={[0, 0.009, 0]} castShadow receiveShadow>
+          <circleGeometry args={[0.3, 20]} />
+          <meshStandardMaterial color="#C4DCC8" roughness={ROUGH} metalness={0} bumpMap={bump} bumpScale={0.025} />
+        </mesh>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.12, 0.0105, -0.06]} receiveShadow>
+          <circleGeometry args={[0.09, 12]} />
+          <meshStandardMaterial color="#5A8FA8" roughness={0.4} metalness={0} transparent opacity={0.74} />
+        </mesh>
+        <mesh position={[0, -0.044, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.29, 0.26, 0.078, 18]} />
+          <meshStandardMaterial color={LEFT_BASE_F} roughness={ROUGH} metalness={0} />
+        </mesh>
+        <Tree position={[-0.06, 0, 0.08]} scale={0.18} canopyGeo={canopyGeo} feltBump={feltBump} canopyColor="#4E664A" />
+        <PuddingRock position={[0.14, 0.017, 0.02]} scale={[0.52, 0.36, 0.48]} color="#A89888" />
+        <PuddingRock position={[-0.18, 0.014, -0.1]} scale={[0.4, 0.3, 0.42]} color="#7B6F8C" />
+        <PuddingRock position={[0.02, 0.012, -0.2]} scale={[0.34, 0.24, 0.36]} color="#8C9AA0" />
+        <MicroIsletFlowerPatch
+          seed={44026}
+          count={8}
+          maxRadius={0.26}
+          innerRadius={0.05}
+          feltBump={feltBump}
+          palette={LEFT_MICRO_FLORA_SOFT}
+        />
+      </group>
+    </>
+  );
+}
+
 /** Bottom-left foreground — curved log bridge hint */
 function ForegroundArcLogBridge() {
   const n = 10;
@@ -2756,14 +3749,39 @@ export function AuraWorldDiorama() {
   const canopyGeo = useCanopyProfileGeometry();
   const spiralGeo = useSpiralTubeGeometry();
 
+  const orbitRef = useRef<OrbitControlsImpl | null>(null);
+  const harborFloatRef = useRef<THREE.Group>(null);
+  const anchorFloatRef = useRef<THREE.Group>(null);
+  const citadelFloatRef = useRef<THREE.Group>(null);
+  const auraSunRef = useRef<THREE.DirectionalLight>(null);
+  const auraHemiRef = useRef<THREE.HemisphereLight>(null);
+
+  const harborMeta = auraIslandById("harbor");
+  const anchorMeta = auraIslandById("anchor");
+  const citadelMeta = auraIslandById("citadel");
+
   const harborRockTints = useMemo(() => [HARBOR_DEEP, SLATE, "#6B756E", HARBOR_MOSS], []);
   const anchorRockTints = useMemo(() => ["#B5ADA2", "#A89E92", "#9E958A", MATCHA], []);
   const citadelRockTints = useMemo(() => [CITADEL_STRATA, TERRACOTTA, CITADEL_CREAM], []);
 
+  useLayoutEffect(() => {
+    const s = useAuraWorldSelection.getState();
+    s.setSelected(null);
+    s.setHovered(null);
+    // Do not call resetInteraction() here — it clears floatRoots; if this effect runs after
+    // IslandFloat/AuraSelectableIsland layout, it would wipe refs and break hover projection.
+  }, []);
+
+  useLayoutEffect(() => {
+    if (auraSunRef.current) auraSunRef.current.shadow.radius = 7;
+  }, []);
+
   return (
-    <>
+    <Selection>
+      <>
       <ShadowSetup />
       <DioramaCameraRig />
+      <AuraIslandHoverScreenProjector />
 
       <color attach="background" args={["#EAF4EB"]} />
       <fogExp2 attach="fog" args={[FOG_COLOR, FOG_DENSITY]} />
@@ -2772,17 +3790,15 @@ export function AuraWorldDiorama() {
       <MistVeilPlane />
       <CloudSeaPlane />
 
-      <ambientLight intensity={0.84} color="#FFF4E0" />
+      <ambientLight intensity={1.056} color="#FFFAF4" />
 
-      <hemisphereLight color="#F1F8E8" groundColor="#D2B48C" intensity={0.52} />
+      <hemisphereLight ref={auraHemiRef} color="#F4FAF0" groundColor="#D4E8D8" intensity={0.696} />
 
       <directionalLight
-        ref={(L) => {
-          if (L) L.shadow.radius = 9;
-        }}
+        ref={auraSunRef}
         castShadow
         position={[10, 15, 10]}
-        intensity={1.32}
+        intensity={1.896}
         color="#FFF6EC"
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={0.5}
@@ -2804,7 +3820,12 @@ export function AuraWorldDiorama() {
 
       <DistantCornerPuddingCluster />
       <DistantMossIslets canopyGeo={canopyGeo} feltBump={feltBump} />
+      <DistantLeftCloudsideMicroIslet canopyGeo={canopyGeo} feltBump={feltBump} />
+      <DistantLeftForegroundRomanticPlate canopyGeo={canopyGeo} feltBump={feltBump} />
+      <DistantRightBackUrbanDecorIsle canopyGeo={canopyGeo} feltBump={feltBump} />
       <WorldScatterDreamToys />
+      <AuraMagicalMistScenery />
+      <CitadelToyStarRiver />
       <ForegroundArcLogBridge />
 
       {/* Harbor (lagoon) ↔ Anchor — heavy plank span */}
@@ -2813,6 +3834,7 @@ export function AuraWorldDiorama() {
       <RopeSlatBridge ax={4.82} az={-3.28} bx={5.78} bz={-4.68} y={0.22} sag={0.4} slats={16} />
 
       <OrbitControls
+        ref={orbitRef}
         enablePan={false}
         enableZoom={false}
         minPolarAngle={Math.PI / 3.95}
@@ -2823,9 +3845,19 @@ export function AuraWorldDiorama() {
         enableDamping
         dampingFactor={0.032}
       />
+      <AuraWorldCameraFocus controlsRef={orbitRef} />
 
       {/* Island 1 — Blue lagoon */}
-      <IslandFloat x={-5.05} y={0.04} z={4.45} speed={0.42} phase={0.65} amplitude={0.032}>
+      <IslandFloat
+        ref={harborFloatRef}
+        x={harborMeta.position[0]}
+        y={harborMeta.position[1]}
+        z={harborMeta.position[2]}
+        speed={harborMeta.float.speed}
+        phase={harborMeta.float.phase}
+        amplitude={harborMeta.float.amplitude}
+      >
+        <AuraSelectableIsland id={harborMeta.id} floatRef={harborFloatRef}>
         <group scale={1.28} rotation={[0, 0.52, 0]}>
           <HarborOrganicMass />
           <HarborTurfDeck grainMap={grainMap} />
@@ -2864,10 +3896,21 @@ export function AuraWorldDiorama() {
           <ScatterFlowers seed={2201} count={36} maxRadius={2.12} innerRadius={0.2} feltBump={feltBump} />
         </group>
         <IslandMatchaGround radius={5.55} />
+        <IslandUnderSoftShadow scaleX={4.95} scaleZ={4.05} strength={0.38} />
+        </AuraSelectableIsland>
       </IslandFloat>
 
       {/* Island 2 — Anchor */}
-      <IslandFloat x={3.15} y={0} z={-0.55} speed={0.34} phase={2.4} amplitude={0.034}>
+      <IslandFloat
+        ref={anchorFloatRef}
+        x={anchorMeta.position[0]}
+        y={anchorMeta.position[1]}
+        z={anchorMeta.position[2]}
+        speed={anchorMeta.float.speed}
+        phase={anchorMeta.float.phase}
+        amplitude={anchorMeta.float.amplitude}
+      >
+        <AuraSelectableIsland id={anchorMeta.id} floatRef={anchorFloatRef}>
         <group scale={1.12}>
           <IslandFloor radius={3.35} color={MATCHA} grainMap={grainMap} puckHeight={0.22} />
           <LogPlankPath />
@@ -2894,10 +3937,21 @@ export function AuraWorldDiorama() {
           />
         </group>
         <IslandMatchaGround radius={6.85} />
+        <IslandUnderSoftShadow scaleX={5.95} scaleZ={6.25} strength={0.32} />
+        </AuraSelectableIsland>
       </IslandFloat>
 
       {/* Island 3 — Citadel */}
-      <IslandFloat x={6.45} y={0.52} z={-5.85} speed={0.88} phase={3.9} amplitude={0.038}>
+      <IslandFloat
+        ref={citadelFloatRef}
+        x={citadelMeta.position[0]}
+        y={citadelMeta.position[1]}
+        z={citadelMeta.position[2]}
+        speed={citadelMeta.float.speed}
+        phase={citadelMeta.float.phase}
+        amplitude={citadelMeta.float.amplitude}
+      >
+        <AuraSelectableIsland id={citadelMeta.id} floatRef={citadelFloatRef}>
         <group scale={1.22} rotation={[0, -0.48, 0]}>
           <CitadelStrataBase />
           <CitadelStrataVines />
@@ -2931,7 +3985,23 @@ export function AuraWorldDiorama() {
           />
         </group>
         <IslandMatchaGround radius={5.35} />
+        <IslandUnderSoftShadow scaleX={4.55} scaleZ={4.95} strength={0.35} />
+        </AuraSelectableIsland>
       </IslandFloat>
-    </>
+
+      <EffectComposer>
+        <SelectiveBloom
+          lights={
+            [auraSunRef, auraHemiRef] as [MutableRefObject<THREE.Object3D>, MutableRefObject<THREE.Object3D>]
+          }
+          intensity={0.36}
+          luminanceThreshold={0.78}
+          luminanceSmoothing={0.45}
+          mipmapBlur
+          radius={0.68}
+        />
+      </EffectComposer>
+      </>
+    </Selection>
   );
 }
