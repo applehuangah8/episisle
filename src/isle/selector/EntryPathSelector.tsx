@@ -272,7 +272,6 @@ export function EntryPathSelector({ onChooseQuick, onChooseImmersive }: EntryPat
           className="isle-sel-bg-img"
           draggable={false}
           decoding="async"
-          fetchPriority="high"
         />
       </div>
       <div className="isle-sel-bg-scrim" aria-hidden />

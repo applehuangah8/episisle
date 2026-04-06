@@ -2,16 +2,22 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Orbit } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { ENTRY_PATH_COPY, EXPERIENCE_DESTINATIONS } from "@/isle/chrome/isleDestinations";
+import { useAuraWorldSelection } from "@/isle/aura/auraWorldSelectionStore";
+import { ISLE_DESTINATIONS, SELECTOR_COPY, getImmersiveTravelLabels } from "@/isle/chrome/isleDestinations";
 import { useAppMode } from "@/isle/ModeContext";
 import type { AppMode } from "@/isle/types";
 
+export type AuraIsleTravelDock = "topRight" | "bottomRight";
+
+type Props = { dock?: AuraIsleTravelDock };
+
 /**
- * Aura 側導航：儀式感面板（orchestrator 疊加，不修改 AuraApp 內場景邏輯）。
- * CONTRACT：僅 `useAppMode`，不 import `@/aura` 內部元件。
+ * in-world 層導航：時空機。依 `useAuraWorldSelection` 區分「探索 / Focus」（AppMode 皆為 auraWorld）。
  */
-export function AuraIsleTravelRite() {
+export function AuraIsleTravelRite({ dock = "topRight" }: Props) {
   const { mode, setMode } = useAppMode();
+  const entryFlowStage = useAuraWorldSelection((s) => s.entryFlowStage);
+  const viewMode = useAuraWorldSelection((s) => s.viewMode);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -44,10 +50,28 @@ export function AuraIsleTravelRite() {
 
   const current: AppMode = mode;
 
+  const immersiveLabels =
+    mode === "auraWorld"
+      ? getImmersiveTravelLabels({
+          entryReady: entryFlowStage === "ready",
+          viewMode: entryFlowStage === "ready" ? viewMode : null,
+        })
+      : null;
+
+  const wrapCls =
+    dock === "bottomRight"
+      ? "pointer-events-none absolute bottom-6 right-5 z-[60] md:right-6"
+      : "pointer-events-none absolute right-5 top-4 z-[60] md:right-6";
+
+  const panelCls =
+    dock === "bottomRight"
+      ? "absolute bottom-[calc(100%+10px)] right-0 w-[min(calc(100vw-2.5rem),280px)] overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_28px_80px_-20px_rgba(0,0,0,0.65)]"
+      : "absolute right-0 top-[calc(100%+10px)] w-[min(calc(100vw-2.5rem),280px)] overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_28px_80px_-20px_rgba(0,0,0,0.65)]";
+
   return (
     <div
       ref={rootRef}
-      className="pointer-events-none absolute right-5 top-4 z-[60] md:right-6"
+      className={wrapCls}
       data-epis-aura-travel-rite
     >
       <div className="pointer-events-auto relative">
@@ -86,7 +110,7 @@ export function AuraIsleTravelRite() {
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
               transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute right-0 top-[calc(100%+10px)] w-[min(calc(100vw-2.5rem),280px)] overflow-hidden rounded-2xl border border-white/[0.08] shadow-[0_28px_80px_-20px_rgba(0,0,0,0.65)]"
+              className={panelCls}
               style={{
                 borderWidth: "0.5px",
                 background:
@@ -119,9 +143,12 @@ export function AuraIsleTravelRite() {
               </div>
 
               <div className="px-2 py-2">
-                {EXPERIENCE_DESTINATIONS.map((row) => {
+                {ISLE_DESTINATIONS.map((row) => {
                   const here = row.mode != null && row.mode === current;
                   const can = row.mode != null;
+                  const isImmersiveRow = row.key === "auraWorld";
+                  const title = isImmersiveRow && immersiveLabels ? immersiveLabels.title : row.title;
+                  const subtitle = isImmersiveRow && immersiveLabels ? immersiveLabels.subtitle : row.subtitle;
                   return (
                     <button
                       key={row.key}
@@ -145,7 +172,7 @@ export function AuraIsleTravelRite() {
                             color: "rgba(238,232,252,0.9)",
                           }}
                         >
-                          {row.title}
+                          {title}
                         </span>
                         {here ? (
                           <span
@@ -155,12 +182,12 @@ export function AuraIsleTravelRite() {
                             <span style={{ color: "#B2D8D8" }} aria-hidden>
                               {"\u2660\uFE0E"}
                             </span>
-                            <span>you are here</span>
+                            <span>目前在此</span>
                           </span>
                         ) : null}
                       </div>
                       <p className="mt-1 text-[10px] leading-snug" style={{ color: "rgba(190,186,205,0.45)" }}>
-                        {row.subtitle}
+                        {subtitle}
                       </p>
                     </button>
                   );
@@ -181,10 +208,10 @@ export function AuraIsleTravelRite() {
                       color: "rgba(232,226,244,0.88)",
                     }}
                   >
-                    {ENTRY_PATH_COPY.title}
+                    {SELECTOR_COPY.title}
                   </span>
                   <p className="mt-1 text-[10px]" style={{ color: "rgba(180,176,198,0.48)" }}>
-                    {ENTRY_PATH_COPY.subtitle}
+                    {SELECTOR_COPY.subtitle}
                   </p>
                 </button>
               </div>

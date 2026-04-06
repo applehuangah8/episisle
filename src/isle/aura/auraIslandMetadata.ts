@@ -1,21 +1,24 @@
 import type { AuraIslandId } from "./auraWorldIslandTypes";
-
-/** Canonical English names (bracketed in UI when no user override). */
-export const AURA_ISLAND_DEFAULT_NAMES: Record<AuraIslandId, string> = {
-  harbor: "Isle Aube",
-  anchor: "Isle Brume",
-  citadel: "Isle Ciel",
-};
+import { AURA_ISLAND_DEFAULT_NAMES } from "./auraWorldIslandTypes";
+import { useAuraWorldSelection } from "./auraWorldSelectionStore";
 
 export type AuraIslandUiStatus = "floating" | "exploring";
 
+/** Resolved label for Layer 2 UI / plates (includes persisted world name). */
+export function getResolvedAuraIslandDisplayName(id: AuraIslandId): string {
+  const row = useAuraWorldSelection.getState().worldMetaById[id];
+  const n = row?.name?.trim();
+  if (n) return n;
+  return AURA_ISLAND_DEFAULT_NAMES[id];
+}
+
 /**
- * User-defined display name for an island slot (e.g. from save metadata).
- * Return null / empty → UI uses {@link AURA_ISLAND_DEFAULT_NAMES}.
+ * @deprecated Prefer {@link getResolvedAuraIslandDisplayName}.
  */
-export function getAuraIslandCustomName(_id: AuraIslandId): string | null {
-  // TODO: read from save / profile store when persistence exists
-  return null;
+export function getAuraIslandCustomName(id: AuraIslandId): string | null {
+  const row = useAuraWorldSelection.getState().worldMetaById[id];
+  const n = row?.name?.trim();
+  return n || null;
 }
 
 /**
@@ -32,16 +35,12 @@ export function getAuraIslandUiStatus(id: AuraIslandId): AuraIslandUiStatus {
 }
 
 export function getAuraIslandTitleLine(id: AuraIslandId): string {
-  const custom = getAuraIslandCustomName(id)?.trim();
-  if (custom) return custom;
-  return `[${AURA_ISLAND_DEFAULT_NAMES[id]}]`;
+  return getResolvedAuraIslandDisplayName(id);
 }
 
 /** Uppercase plate line after the sparkle icon (no numeric prefix). */
 export function getAuraIslandPlateNameUpper(id: AuraIslandId): string {
-  const custom = getAuraIslandCustomName(id)?.trim();
-  if (custom) return custom.toUpperCase();
-  return AURA_ISLAND_DEFAULT_NAMES[id].toUpperCase();
+  return getResolvedAuraIslandDisplayName(id).toUpperCase();
 }
 
 /** Stable pick between two deep blues per island (no flicker on re-render). */

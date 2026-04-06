@@ -55,6 +55,9 @@ const SILVER_STROKE = "rgba(236, 238, 242, 0.92)";
  * glass blur panel; hover strengthens opacity and adds a soft line glow.
  */
 export function AuraIslandHoverScreenOverlay() {
+  const isEnteredWorld = useAuraWorldSelection((s) => s.isEntered);
+  /** Subscribe so plate copy refreshes when world names change. */
+  useAuraWorldSelection((s) => s.worldMetaById);
   const anchor = useAuraIslandHoverOverlay((s) => s.anchor);
   const [hovered, setHovered] = useState(false);
   const uid = useId();
@@ -78,7 +81,7 @@ export function AuraIslandHoverScreenOverlay() {
   const statusLabel = status === "exploring" ? "exploring" : "floating";
   const statusColor = anchor ? getAuraIslandStatusAccentColor(anchor.id) : "#153B78";
 
-  if (!anchor || !geo) return null;
+  if (isEnteredWorld || !anchor || !geo) return null;
 
   const { x: ax, y: ay } = anchor;
 

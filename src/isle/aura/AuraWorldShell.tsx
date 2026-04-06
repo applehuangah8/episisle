@@ -1,12 +1,8 @@
-import { Canvas } from "@react-three/fiber";
-import { Suspense } from "react";
-import * as THREE from "three";
-
-import { AuraIsleTravelRite } from "@/isle/chrome/AuraIsleTravelRite";
-
 import { AuraIslandHoverScreenOverlay } from "./AuraIslandHoverScreenOverlay";
-import { AuraWorldDiorama } from "./AuraWorldDiorama";
-import { useAuraWorldSelection } from "./auraWorldSelectionStore";
+import { AuraWorldCanvasHost } from "./AuraWorldCanvasHost";
+import { AuraWorldEnterFlash } from "./AuraWorldEnterFlash";
+import { AuraWorldSpatialInterface } from "./AuraWorldSpatialInterface";
+import { AuraWorldTravelDock } from "./AuraWorldTravelDock";
 
 /**
  * Layer 2 — Aura World: full-viewport diorama shell (not a flat UI screen).
@@ -20,29 +16,7 @@ export function AuraWorldShell() {
   return (
     <div className="relative h-full min-h-0 w-full bg-[#F1F8E8]" data-aura-world-shell>
       {/* Canvas below soulful glow so vignette blends on top; hover overlay is z-[75] above both */}
-      <div className="absolute inset-0 z-[1] min-h-0">
-        <Canvas
-          orthographic
-          shadows
-          dpr={[1, 2]}
-          onPointerMissed={() => useAuraWorldSelection.getState().clearSelection()}
-          gl={{
-            antialias: true,
-            toneMapping: THREE.ACESFilmicToneMapping,
-            toneMappingExposure: 1.294,
-          }}
-          camera={{
-            position: [10.85, 8.32, 10.55],
-            zoom: 40.6,
-            near: 0.1,
-            far: 260,
-          }}
-        >
-          <Suspense fallback={null}>
-            <AuraWorldDiorama />
-          </Suspense>
-        </Canvas>
-      </div>
+      <AuraWorldCanvasHost />
       <div
         className="pointer-events-none absolute inset-0 z-[2] isolate"
         aria-hidden
@@ -79,7 +53,9 @@ export function AuraWorldShell() {
           }}
         />
       </div>
-      <AuraIsleTravelRite />
+      <AuraWorldEnterFlash />
+      <AuraWorldSpatialInterface />
+      <AuraWorldTravelDock />
       {/* Screen-space hover callout: above glow + travel chrome (pointer-events none → clicks pass through) */}
       <AuraIslandHoverScreenOverlay />
     </div>

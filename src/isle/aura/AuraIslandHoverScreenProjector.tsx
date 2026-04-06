@@ -13,11 +13,16 @@ export function AuraIslandHoverScreenProjector() {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const hoveredId = useAuraWorldSelection((s) => s.hoveredId);
+  const isEntered = useAuraWorldSelection((s) => s.isEntered);
   const floatRoots = useAuraWorldSelection((s) => s.floatRoots);
   const setAnchor = useAuraIslandHoverOverlay((s) => s.setAnchor);
   const world = useMemo(() => new THREE.Vector3(), []);
 
   useFrame(() => {
+    if (isEntered) {
+      setAnchor(null);
+      return;
+    }
     if (!hoveredId) {
       setAnchor(null);
       return;

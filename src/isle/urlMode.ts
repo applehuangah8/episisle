@@ -34,3 +34,15 @@ export function writeModeToUrl(mode: AppMode): void {
   const next = `${url.pathname}${url.search}${url.hash}`;
   window.history.replaceState(window.history.state, "", next);
 }
+
+/**
+ * Layer 2 optional: which world is entered (`?world=lagoon|anchor|citadel`).
+ * Does not navigate or reload — `replaceState` only. No router.
+ */
+export function writeAuraWorldSlugToUrl(slug: string | null): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (slug) url.searchParams.set("world", slug);
+  else url.searchParams.delete("world");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}

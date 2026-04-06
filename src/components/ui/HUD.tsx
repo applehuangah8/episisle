@@ -15,6 +15,9 @@ import { useAreaDetection } from "@/canvas/useAreaDetection";
 import { getWorldPointAtCanvasCenter } from "@/canvas/viewportMath";
 import type { FocusLifecyclePreset, FocusRealm } from "@/core/focusMode";
 import type { DistrictType, DistrictZoneHint } from "@/core/types";
+import { getResolvedAuraIslandDisplayName } from "@/isle/aura/auraIslandMetadata";
+import type { AuraIslandId } from "@/isle/aura/auraWorldIslandTypes";
+import { useWorldEnteredFocusWorldId } from "@/isle/aura/WorldEnteredFocusScope";
 import { useStore } from "@/store/useStore";
 
 const hudFrameStyle: CSSProperties = {
@@ -66,6 +69,10 @@ const FOCUS_LIFECYCLE_OPTIONS: { value: FocusLifecyclePreset; label: string }[] 
 ];
 
 export function HUD({ canvasSurfaceRef }: HUDProps) {
+  const inWorldFocusWorldId = useWorldEnteredFocusWorldId();
+  const inWorldIsleLabel =
+    inWorldFocusWorldId != null ? getResolvedAuraIslandDisplayName(inWorldFocusWorldId as AuraIslandId) : null;
+
   const viewport = useStore((s) => s.viewport);
   const addBlock = useStore((s) => s.addBlock);
   const addBlockInDistrict = useStore((s) => s.addBlockInDistrict);
@@ -178,13 +185,24 @@ export function HUD({ canvasSurfaceRef }: HUDProps) {
         className={`pointer-events-auto mx-3 mt-3 flex items-center justify-between gap-3 px-4 py-2.5 ${HUD_SURFACE}`}
         style={hudFrameStyle}
       >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="select-none text-lg leading-none" title="Island">
-            🏝️
-          </span>
-          <h1 className="truncate font-sans text-sm font-medium tracking-[0.2em] text-[var(--color-text)]">
-            Epis isle
-          </h1>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="select-none text-lg leading-none" title="Island">
+              🏝️
+            </span>
+            <h1 className="truncate font-sans text-sm font-medium tracking-[0.2em] text-[var(--color-text)]">
+              Epis isle
+            </h1>
+          </div>
+          {inWorldIsleLabel ? (
+            <p
+              className="truncate pl-8 text-[9px] font-normal tracking-[0.32em] text-[var(--color-text-muted)] opacity-[0.82]"
+              style={{ fontFamily: "'Playfair Display', 'Cormorant Garamond', Georgia, serif" }}
+              title={inWorldIsleLabel}
+            >
+              {inWorldIsleLabel}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">

@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Plane } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { ENTRY_PATH_COPY, EXPERIENCE_DESTINATIONS } from "@/isle/chrome/isleDestinations";
+import { ISLE_DESTINATIONS, SELECTOR_COPY } from "@/isle/chrome/isleDestinations";
 import { useAppMode } from "@/isle/ModeContext";
 import type { AppMode } from "@/isle/types";
 
@@ -87,7 +87,7 @@ export function FocusIsleTravelHud() {
               <p className="px-3 pb-1 pt-2 text-[9px] font-medium uppercase tracking-[0.28em] text-epis-ink/38">
                 路徑
               </p>
-              {EXPERIENCE_DESTINATIONS.map((row) => {
+              {ISLE_DESTINATIONS.map((row) => {
                 const here = row.mode != null && row.mode === current;
                 const can = row.mode != null;
                 return (
@@ -113,7 +113,7 @@ export function FocusIsleTravelHud() {
                         <span style={{ color: "#B2D8D8" }} aria-hidden>
                           {"\u2660\uFE0E"}
                         </span>
-                        <span>you are here</span>
+                        <span>目前在此</span>
                       </span>
                     ) : null}
                   </button>
@@ -125,8 +125,8 @@ export function FocusIsleTravelHud() {
                 className="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition hover:bg-[var(--color-glass)]/80"
                 onClick={() => go("entry")}
               >
-                <span className="text-[12px] font-medium text-epis-ink/82">{ENTRY_PATH_COPY.title}</span>
-                <span className="text-[10px] text-epis-ink/45">{ENTRY_PATH_COPY.subtitle}</span>
+                <span className="text-[12px] font-medium text-epis-ink/82">{SELECTOR_COPY.title}</span>
+                <span className="text-[10px] text-epis-ink/45">{SELECTOR_COPY.subtitle}</span>
               </button>
             </motion.div>
           ) : null}

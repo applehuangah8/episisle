@@ -1,7 +1,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, Select, Selection, SelectiveBloom } from "@react-three/postprocessing";
 import { OrbitControls, RoundedBox } from "@react-three/drei";
-import {
+import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -10,11 +10,13 @@ import {
   useState,
   type MutableRefObject,
   type ReactNode,
+  type RefObject,
 } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { IslandFloat } from "./AuraIslandFloat";
+import { AuraWorldEnterAtmosphere } from "./AuraWorldEnterAtmosphere";
 import { AuraMagicalMistScenery } from "./AuraMagicalMistScenery";
 import { AuraIslandHoverScreenProjector } from "./AuraIslandHoverScreenProjector";
 import { CitadelToyStarRiver } from "./AuraStarRiver";
@@ -2618,101 +2620,6 @@ function CloudSeaPlane() {
   );
 }
 
-/** Solid pale matcha pad — replaces translucent ContactShadows */
-function IslandMatchaGround({ radius }: { radius: number }) {
-  return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0.0025, 0]}
-      renderOrder={-2}
-      castShadow={false}
-      receiveShadow={false}
-    >
-      <circleGeometry args={[radius, 56]} />
-      <meshBasicMaterial
-        color={MATCHA_MIST}
-        depthWrite={false}
-        polygonOffset
-        polygonOffsetFactor={1}
-        polygonOffsetUnits={1}
-      />
-    </mesh>
-  );
-}
-
-const ISLAND_SOFT_SHADOW_VS = /* glsl */ `
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const ISLAND_SOFT_SHADOW_FS = /* glsl */ `
-varying vec2 vUv;
-uniform float uStrength;
-void main() {
-  vec2 p = vUv - vec2(0.5);
-  float d = length(p) * 2.0;
-  float core = 1.0 - smoothstep(0.04, 0.56, d);
-  float rim = (1.0 - smoothstep(0.38, 1.02, d)) * 0.58;
-  float a = clamp(core * 0.88 + rim, 0.0, 1.0) * uStrength;
-  vec3 rgb = vec3(0.14, 0.22, 0.19);
-  gl_FragColor = vec4(rgb, a);
-}
-`;
-
-/** Soft radial darkening on the matcha pad — contact-style shadow without blocking the map */
-function IslandUnderSoftShadow({
-  scaleX,
-  scaleZ,
-  y = 0.004,
-  strength = 0.26,
-}: {
-  scaleX: number;
-  scaleZ: number;
-  y?: number;
-  strength?: number;
-}) {
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        uniforms: { uStrength: { value: strength } },
-        vertexShader: ISLAND_SOFT_SHADOW_VS,
-        fragmentShader: ISLAND_SOFT_SHADOW_FS,
-        transparent: true,
-        depthWrite: false,
-        depthTest: true,
-        polygonOffset: true,
-        polygonOffsetFactor: -3,
-        polygonOffsetUnits: -3,
-      }),
-    [],
-  );
-
-  useEffect(() => {
-    material.uniforms.uStrength.value = strength;
-  }, [material, strength]);
-
-  useEffect(() => {
-    return () => material.dispose();
-  }, [material]);
-
-  return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, y, 0]}
-      scale={[scaleX, scaleZ, 1]}
-      renderOrder={-1}
-      castShadow={false}
-      receiveShadow={false}
-    >
-      <circleGeometry args={[1, 64]} />
-      <primitive object={material} attach="material" />
-    </mesh>
-  );
-}
-
 /** Plank bridge with parabolic sag + side rails (Harbor ↔ Anchor) */
 function HangingWoodBridge({
   ax,
@@ -3743,6 +3650,47 @@ function ForegroundArcLogBridge() {
   );
 }
 
+function AuraWorldOrbitControls({ orbitRef }: { orbitRef: RefObject<OrbitControlsImpl | null> }) {
+  const isEntered = useAuraWorldSelection((s) => s.isEntered);
+  return (
+    <OrbitControls
+      ref={orbitRef as React.Ref<OrbitControlsImpl>}
+      enablePan={false}
+      enableZoom={false}
+      enableRotate={!isEntered}
+      minPolarAngle={Math.PI / 3.95}
+      maxPolarAngle={Math.PI / 2.08}
+      minAzimuthAngle={-0.88}
+      maxAzimuthAngle={0.82}
+      target={ARCH_CENTER}
+      enableDamping
+      dampingFactor={0.032}
+    />
+  );
+}
+
+function AuraWorldSelectiveBloomR3f({
+  auraSunRef,
+  auraHemiRef,
+}: {
+  auraSunRef: MutableRefObject<THREE.DirectionalLight | null>;
+  auraHemiRef: MutableRefObject<THREE.HemisphereLight | null>;
+}) {
+  const boost = useAuraWorldSelection((s) => s.entryBloomBoost);
+  return (
+    <SelectiveBloom
+      lights={
+        [auraSunRef, auraHemiRef] as [MutableRefObject<THREE.Object3D>, MutableRefObject<THREE.Object3D>]
+      }
+      intensity={0.36 * (1 + 0.5 * boost)}
+      luminanceThreshold={0.78}
+      luminanceSmoothing={0.45}
+      mipmapBlur
+      radius={0.68}
+    />
+  );
+}
+
 export function AuraWorldDiorama() {
   const grainMap = useFeltGrainTexture();
   const feltBump = useFeltBumpTexture();
@@ -3755,6 +3703,7 @@ export function AuraWorldDiorama() {
   const citadelFloatRef = useRef<THREE.Group>(null);
   const auraSunRef = useRef<THREE.DirectionalLight>(null);
   const auraHemiRef = useRef<THREE.HemisphereLight>(null);
+  const enterBackdropRef = useRef<THREE.Group>(null);
 
   const harborMeta = auraIslandById("harbor");
   const anchorMeta = auraIslandById("anchor");
@@ -3766,10 +3715,9 @@ export function AuraWorldDiorama() {
 
   useLayoutEffect(() => {
     const s = useAuraWorldSelection.getState();
-    s.setSelected(null);
     s.setHovered(null);
-    // Do not call resetInteraction() here — it clears floatRoots; if this effect runs after
-    // IslandFloat/AuraSelectableIsland layout, it would wipe refs and break hover projection.
+    s.resetWorldEntry();
+    /* Do not call resetInteraction() — it clears floatRoots and breaks hover projection. */
   }, []);
 
   useLayoutEffect(() => {
@@ -3811,6 +3759,8 @@ export function AuraWorldDiorama() {
         shadow-normalBias={0.052}
       />
 
+      <AuraWorldEnterAtmosphere backdropGroupRef={enterBackdropRef} sunRef={auraSunRef} />
+
       <GeometricDust count={920} />
       <FloatingVacuumShards count={320} />
       <SkyMistOrbs />
@@ -3818,33 +3768,24 @@ export function AuraWorldDiorama() {
       <AuraVoidParticles count={280} />
       <ShoreBirdSilhouettes />
 
-      <DistantCornerPuddingCluster />
-      <DistantMossIslets canopyGeo={canopyGeo} feltBump={feltBump} />
-      <DistantLeftCloudsideMicroIslet canopyGeo={canopyGeo} feltBump={feltBump} />
-      <DistantLeftForegroundRomanticPlate canopyGeo={canopyGeo} feltBump={feltBump} />
-      <DistantRightBackUrbanDecorIsle canopyGeo={canopyGeo} feltBump={feltBump} />
-      <WorldScatterDreamToys />
-      <AuraMagicalMistScenery />
-      <CitadelToyStarRiver />
-      <ForegroundArcLogBridge />
+      <group ref={enterBackdropRef}>
+        <DistantCornerPuddingCluster />
+        <DistantMossIslets canopyGeo={canopyGeo} feltBump={feltBump} />
+        <DistantLeftCloudsideMicroIslet canopyGeo={canopyGeo} feltBump={feltBump} />
+        <DistantLeftForegroundRomanticPlate canopyGeo={canopyGeo} feltBump={feltBump} />
+        <DistantRightBackUrbanDecorIsle canopyGeo={canopyGeo} feltBump={feltBump} />
+        <WorldScatterDreamToys />
+        <AuraMagicalMistScenery />
+        <CitadelToyStarRiver />
+        <ForegroundArcLogBridge />
 
-      {/* Harbor (lagoon) ↔ Anchor — heavy plank span */}
-      <HangingWoodBridge ax={-2.72} az={3.05} bx={0.52} bz={0.98} y={0.09} sag={0.34} plankCount={18} />
-      {/* Anchor ↔ Citadel — rope + slats */}
-      <RopeSlatBridge ax={4.82} az={-3.28} bx={5.78} bz={-4.68} y={0.22} sag={0.4} slats={16} />
+        {/* Harbor (lagoon) ↔ Anchor — heavy plank span */}
+        <HangingWoodBridge ax={-2.72} az={3.05} bx={0.52} bz={0.98} y={0.09} sag={0.34} plankCount={18} />
+        {/* Anchor ↔ Citadel — rope + slats */}
+        <RopeSlatBridge ax={4.82} az={-3.28} bx={5.78} bz={-4.68} y={0.22} sag={0.4} slats={16} />
+      </group>
 
-      <OrbitControls
-        ref={orbitRef}
-        enablePan={false}
-        enableZoom={false}
-        minPolarAngle={Math.PI / 3.95}
-        maxPolarAngle={Math.PI / 2.08}
-        minAzimuthAngle={-0.88}
-        maxAzimuthAngle={0.82}
-        target={ARCH_CENTER}
-        enableDamping
-        dampingFactor={0.032}
-      />
+      <AuraWorldOrbitControls orbitRef={orbitRef} />
       <AuraWorldCameraFocus controlsRef={orbitRef} />
 
       {/* Island 1 — Blue lagoon */}
@@ -3895,8 +3836,6 @@ export function AuraWorldDiorama() {
           <ScatterMochiRocks seed={7711} count={34} maxRadius={2.25} innerRadius={0.25} tints={harborRockTints} />
           <ScatterFlowers seed={2201} count={36} maxRadius={2.12} innerRadius={0.2} feltBump={feltBump} />
         </group>
-        <IslandMatchaGround radius={5.55} />
-        <IslandUnderSoftShadow scaleX={4.95} scaleZ={4.05} strength={0.38} />
         </AuraSelectableIsland>
       </IslandFloat>
 
@@ -3936,8 +3875,6 @@ export function AuraWorldDiorama() {
             variant="anchor"
           />
         </group>
-        <IslandMatchaGround radius={6.85} />
-        <IslandUnderSoftShadow scaleX={5.95} scaleZ={6.25} strength={0.32} />
         </AuraSelectableIsland>
       </IslandFloat>
 
@@ -3984,22 +3921,11 @@ export function AuraWorldDiorama() {
             variant="citadel"
           />
         </group>
-        <IslandMatchaGround radius={5.35} />
-        <IslandUnderSoftShadow scaleX={4.55} scaleZ={4.95} strength={0.35} />
         </AuraSelectableIsland>
       </IslandFloat>
 
       <EffectComposer>
-        <SelectiveBloom
-          lights={
-            [auraSunRef, auraHemiRef] as [MutableRefObject<THREE.Object3D>, MutableRefObject<THREE.Object3D>]
-          }
-          intensity={0.36}
-          luminanceThreshold={0.78}
-          luminanceSmoothing={0.45}
-          mipmapBlur
-          radius={0.68}
-        />
+        <AuraWorldSelectiveBloomR3f auraSunRef={auraSunRef} auraHemiRef={auraHemiRef} />
       </EffectComposer>
       </>
     </Selection>
