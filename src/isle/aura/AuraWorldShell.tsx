@@ -3,6 +3,9 @@ import { AuraWorldCanvasHost } from "./AuraWorldCanvasHost";
 import { AuraWorldEnterFlash } from "./AuraWorldEnterFlash";
 import { AuraWorldSpatialInterface } from "./AuraWorldSpatialInterface";
 import { AuraWorldTravelDock } from "./AuraWorldTravelDock";
+import { AuraCodexOverlay } from "./codex/AuraCodexOverlay";
+import { AuraCodexSceneDim } from "./codex/AuraCodexSceneDim";
+import { AuraCodexTrigger } from "./codex/AuraCodexTrigger";
 
 /**
  * Layer 2 — Aura World: full-viewport diorama shell (not a flat UI screen).
@@ -17,6 +20,7 @@ export function AuraWorldShell() {
     <div className="relative h-full min-h-0 w-full bg-[#F1F8E8]" data-aura-world-shell>
       {/* Canvas below soulful glow so vignette blends on top; hover overlay is z-[75] above both */}
       <AuraWorldCanvasHost />
+      <AuraCodexSceneDim />
       <div
         className="pointer-events-none absolute inset-0 z-[2] isolate"
         aria-hidden
@@ -55,6 +59,8 @@ export function AuraWorldShell() {
       </div>
       <AuraWorldEnterFlash />
       <AuraWorldSpatialInterface />
+      <AuraCodexTrigger />
+      <AuraCodexOverlay />
       <AuraWorldTravelDock />
       {/* Screen-space hover callout: above glow + travel chrome (pointer-events none → clicks pass through) */}
       <AuraIslandHoverScreenOverlay />

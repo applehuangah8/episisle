@@ -2,94 +2,41 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 
 import App from "@/App";
-import { useAppMode } from "@/isle/ModeContext";
 
 import { AuraFocusEntryConfirm } from "./AuraFocusEntryConfirm";
 import { getResolvedAuraIslandDisplayName } from "./auraIslandMetadata";
 import type { AuraIslandId } from "./auraWorldIslandTypes";
-import {
-  type AuraInWorldViewMode,
-  useAuraWorldSelection,
-} from "./auraWorldSelectionStore";
+import { useAuraWorldSelection } from "./auraWorldSelectionStore";
 import { AuraWorldHeldCaption } from "./AuraWorldHeldCaption";
 import { AuraWorldModePickPanel } from "./AuraWorldModePickPanel";
 import { AuraWorldNamingModal } from "./AuraWorldNamingModal";
+import { InWorldClearIslandButton } from "./InWorldClearIslandButton";
 import { InWorldFocusEdgeChrome } from "./InWorldFocusEdgeChrome";
 import { WorldEnteredFocusScope } from "./WorldEnteredFocusScope";
+import { useEpisCodexStore } from "@/isle/aura/codex/episCodexStore";
+
 import { WorldFocusPersistBridge } from "./WorldFocusPersistBridge";
 
 const panelEase = [0.22, 1, 0.36, 1] as const;
-
-function ModeSegment({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className="relative min-w-0 flex-1 rounded-lg px-3 py-2 text-[11px] font-medium tracking-wide transition-[color,transform,filter] duration-200"
-      style={{
-        color: active ? "rgba(42,52,58,0.9)" : "rgba(74,88,96,0.45)",
-        filter: active ? "brightness(1.06)" : "brightness(1)",
-      }}
-    >
-      {active ? (
-        <motion.span
-          layoutId="aura-inworld-mode-pill"
-          className="absolute inset-0 rounded-lg bg-white/[0.42] shadow-[0_1px_0_rgba(255,255,255,0.55)]"
-          style={{ mixBlendMode: "multiply" }}
-          transition={{ type: "spring", stiffness: 420, damping: 34 }}
-        />
-      ) : null}
-      <span className="relative z-[1]">{label}</span>
-    </button>
-  );
-}
 
 export function AuraWorldSpatialInterface() {
   const isEntered = useAuraWorldSelection((s) => s.isEntered);
   const entryFlowStage = useAuraWorldSelection((s) => s.entryFlowStage);
   const viewMode = useAuraWorldSelection((s) => s.viewMode);
   const selectedWorldId = useAuraWorldSelection((s) => s.selectedWorldId);
-  const setInWorldViewMode = useAuraWorldSelection((s) => s.setInWorldViewMode);
-  const setShowFocusEntryConfirm = useAuraWorldSelection((s) => s.setShowFocusEntryConfirm);
   const resetWorldEntry = useAuraWorldSelection((s) => s.resetWorldEntry);
   const auraPanelCollapsed = useAuraWorldSelection((s) => s.auraPanelCollapsed);
   const setAuraPanelCollapsed = useAuraWorldSelection((s) => s.setAuraPanelCollapsed);
   const showFocusEntryConfirm = useAuraWorldSelection((s) => s.showFocusEntryConfirm);
   const showNamingModal = useAuraWorldSelection((s) => s.showNamingModal);
   useAuraWorldSelection((s) => s.worldMetaById);
-
-  const { setMode } = useAppMode();
+  const openCodexForWorld = useEpisCodexStore((s) => s.openCodexForWorld);
 
   if (!isEntered || !selectedWorldId) return null;
 
   const entryReady = entryFlowStage === "ready";
   const islandId = selectedWorldId as AuraIslandId;
   const displayName = getResolvedAuraIslandDisplayName(islandId);
-
-  const requestFocusEntry = () => {
-    if (!entryReady) return;
-    setShowFocusEntryConfirm(true);
-  };
-
-  const setModeSafe = (mode: AuraInWorldViewMode) => {
-    if (mode === "focus") requestFocusEntry();
-    else setInWorldViewMode(mode);
-  };
-
-  const goEntryPath = () => {
-    resetWorldEntry();
-    setMode("entry");
-  };
 
   const returnToArchipelago = () => {
     resetWorldEntry();
@@ -144,7 +91,8 @@ export function AuraWorldSpatialInterface() {
             whileHover={{ filter: "brightness(1.04)", y: -1 }}
             transition={{ duration: 0.22, ease: panelEase }}
           >
-            <div className="mb-1 flex justify-end">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <InWorldClearIslandButton variant="aura" />
               <button
                 type="button"
                 aria-label="Hide panel"
@@ -177,25 +125,18 @@ export function AuraWorldSpatialInterface() {
               </div>
             </div>
 
-            <div
-              className="flex rounded-xl p-0.5"
-              style={{ background: "rgba(255,255,255,0.14)" }}
-              role="tablist"
-              aria-label="View mode"
-            >
-              <ModeSegment active={false} label="Focus" onClick={() => setModeSafe("focus")} />
-              <ModeSegment active label="探索" onClick={() => setInWorldViewMode("aura")} />
-            </div>
-
-            <div className="mt-2.5 space-y-2">
+            <div className="mt-1 space-y-2">
               <button
                 type="button"
-                onClick={goEntryPath}
+                onClick={() => openCodexForWorld(selectedWorldId)}
                 className="w-full rounded-lg border border-white/[0.12] py-2 text-[11px] font-medium transition-[background,filter] duration-200 hover:bg-white/[0.12]"
                 style={{ color: "rgba(52,62,68,0.72)" }}
               >
-                Entry path
+                Epis Codex
               </button>
+              <p className="text-center text-[9px] leading-relaxed text-[rgba(78,90,96,0.42)]">
+                開啟圖鑑編輯典藏；備份與還原請於圖鑑或專注畫面操作
+              </p>
             </div>
 
             <div className="mt-3 flex items-center justify-between border-t border-white/[0.08] pt-2.5">

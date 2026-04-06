@@ -6,6 +6,7 @@ import { useAppMode } from "@/isle/ModeContext";
 import { getResolvedAuraIslandDisplayName } from "./auraIslandMetadata";
 import type { AuraIslandId } from "./auraWorldIslandTypes";
 import { useAuraWorldSelection } from "./auraWorldSelectionStore";
+import { InWorldClearIslandButton } from "./InWorldClearIslandButton";
 import { InWorldFocusBackupBar } from "./InWorldFocusBackupBar";
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -34,7 +35,7 @@ export function InWorldFocusEdgeChrome() {
   const viewMode = useAuraWorldSelection((s) => s.viewMode);
   const entryFlowStage = useAuraWorldSelection((s) => s.entryFlowStage);
   const selectedWorldId = useAuraWorldSelection((s) => s.selectedWorldId);
-  const setView = useAuraWorldSelection((s) => s.setInWorldViewMode);
+  const exitFocusToAura = useAuraWorldSelection((s) => s.exitFocusToAura);
   const focusChromeExpanded = useAuraWorldSelection((s) => s.focusChromeExpanded);
   const setFocusChromeExpanded = useAuraWorldSelection((s) => s.setFocusChromeExpanded);
   const resetWorld = useAuraWorldSelection((s) => s.resetWorldEntry);
@@ -84,7 +85,10 @@ export function InWorldFocusEdgeChrome() {
       onPointerEnter={onChromeEnter}
       onPointerLeave={onChromeLeave}
     >
-      <InWorldFocusBackupBar />
+      <div className="flex items-center gap-2">
+        <InWorldClearIslandButton variant="focus" />
+        <InWorldFocusBackupBar />
+      </div>
 
       <motion.p
         className="max-w-[10rem] pl-0.5 text-[9px] font-normal leading-snug"
@@ -130,7 +134,7 @@ export function InWorldFocusEdgeChrome() {
             transition={{ duration: 0.28, ease }}
           >
             <div className="flex flex-wrap items-center justify-start gap-x-4 gap-y-1">
-              <RailLink onClick={() => setView("aura")}>探索</RailLink>
+              <RailLink onClick={() => exitFocusToAura()}>Aura</RailLink>
               <RailLink onClick={() => resetWorld()}>Return</RailLink>
               <RailLink onClick={goEntryPath}>Entry path</RailLink>
             </div>

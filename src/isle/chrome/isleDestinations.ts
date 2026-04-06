@@ -3,14 +3,16 @@ import type { AppMode } from "@/isle/types";
 /**
  * Travel HUD rows: navigable experience layers (not “isle A/B” product naming).
  */
-export type IsleDestinationKey = "worldFocus" | "auraWorld" | "locked";
+export type IsleDestinationKey = "worldFocus" | "auraWorld" | "rePickIsland" | "locked";
 
 export type IsleDestinationRow = {
   key: IsleDestinationKey;
-  /** Navigable target mode; null = not available */
+  /** Navigable target mode; null = not available (unless `action` is set) */
   mode: AppMode | null;
   title: string;
   subtitle: string;
+  /** Immersive-only: leave entered world and return to archipelago map. */
+  action?: "rePickIsland";
 };
 
 export const ISLE_DESTINATIONS: IsleDestinationRow[] = [
@@ -25,6 +27,13 @@ export const ISLE_DESTINATIONS: IsleDestinationRow[] = [
     mode: "auraWorld",
     title: "世界",
     subtitle: "沉浸探索",
+  },
+  {
+    key: "rePickIsland",
+    mode: null,
+    title: "再次選島",
+    subtitle: "回到群島地圖重選世界",
+    action: "rePickIsland",
   },
   { key: "locked", mode: null, title: "未知", subtitle: "尚未解鎖" },
 ];
@@ -44,7 +53,7 @@ export function getImmersiveTravelLabels(input: {
 }
 
 export const SELECTOR_COPY = {
-  title: "地圖",
+  title: "回主頁",
   subtitle: "回到旅程開始畫面",
 } as const;
 

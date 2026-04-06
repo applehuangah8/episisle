@@ -1,7 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Plane } from "lucide-react";
+import { ChevronDown, Download, Plane, Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import {
+  exportQuickFocusBackup,
+  importQuickFocusBackup,
+} from "@/isle/aura/episIsleWorldBackup";
 import { ISLE_DESTINATIONS, SELECTOR_COPY } from "@/isle/chrome/isleDestinations";
 import { useAppMode } from "@/isle/ModeContext";
 import type { AppMode } from "@/isle/types";
@@ -15,6 +19,8 @@ export function FocusIsleTravelHud() {
   const { mode, setMode } = useAppMode();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
+  const backupInputId = useId();
   const menuId = useId();
 
   const close = useCallback(() => setOpen(false), []);
@@ -42,6 +48,29 @@ export function FocusIsleTravelHud() {
     },
     [setMode, close]
   );
+
+  const onQuickExport = useCallback(() => {
+    const json = exportQuickFocusBackup();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `epis-quick-focus-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const onQuickImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const r = importQuickFocusBackup(String(reader.result ?? ""));
+      if (!r.ok) window.alert(r.error);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, []);
 
   const current: AppMode = mode;
 
@@ -76,7 +105,7 @@ export function FocusIsleTravelHud() {
             <motion.div
               id={menuId}
               role="listbox"
-              aria-label="切換體驗層或開啟地圖"
+              aria-label="切換體驗層或回到主頁"
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -87,7 +116,7 @@ export function FocusIsleTravelHud() {
               <p className="px-3 pb-1 pt-2 text-[9px] font-medium uppercase tracking-[0.28em] text-epis-ink/38">
                 路徑
               </p>
-              {ISLE_DESTINATIONS.map((row) => {
+              {ISLE_DESTINATIONS.filter((row) => row.action !== "rePickIsland").map((row) => {
                 const here = row.mode != null && row.mode === current;
                 const can = row.mode != null;
                 return (
@@ -119,6 +148,38 @@ export function FocusIsleTravelHud() {
                   </button>
                 );
               })}
+              <div className="my-1 h-px bg-[var(--color-stroke)]/12" />
+              <p className="px-3 pb-1 pt-1 text-[9px] font-medium uppercase tracking-[0.26em] text-epis-ink/35">
+                Quick 專案備份
+              </p>
+              <input
+                id={backupInputId}
+                ref={backupInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={onQuickImportFile}
+              />
+              <div className="flex gap-1 px-2 pb-2">
+                <button
+                  type="button"
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[var(--color-panel-border)]/45 bg-[var(--color-glass)]/40 py-2 text-[10px] font-medium text-epis-ink/75 transition hover:bg-[var(--color-glass)]/70"
+                  style={{ borderWidth: "0.5px" }}
+                  onClick={onQuickExport}
+                >
+                  <Download className="size-3 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
+                  匯出
+                </button>
+                <button
+                  type="button"
+                  className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-[var(--color-panel-border)]/45 bg-[var(--color-glass)]/40 py-2 text-[10px] font-medium text-epis-ink/75 transition hover:bg-[var(--color-glass)]/70"
+                  style={{ borderWidth: "0.5px" }}
+                  onClick={() => backupInputRef.current?.click()}
+                >
+                  <Upload className="size-3 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
+                  還原
+                </button>
+              </div>
               <div className="my-1 h-px bg-[var(--color-stroke)]/12" />
               <button
                 type="button"

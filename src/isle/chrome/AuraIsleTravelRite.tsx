@@ -18,6 +18,7 @@ export function AuraIsleTravelRite({ dock = "topRight" }: Props) {
   const { mode, setMode } = useAppMode();
   const entryFlowStage = useAuraWorldSelection((s) => s.entryFlowStage);
   const viewMode = useAuraWorldSelection((s) => s.viewMode);
+  const resetWorldEntry = useAuraWorldSelection((s) => s.resetWorldEntry);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -138,14 +139,15 @@ export function AuraIsleTravelRite({ dock = "topRight" }: Props) {
                   航線
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed" style={{ color: "rgba(200,196,210,0.42)" }}>
-                  選一條路徑，或自地圖重新出發。
+                  選一條路徑；必要時可再次選島或返回主頁。
                 </p>
               </div>
 
               <div className="px-2 py-2">
                 {ISLE_DESTINATIONS.map((row) => {
                   const here = row.mode != null && row.mode === current;
-                  const can = row.mode != null;
+                  const can =
+                    row.action === "rePickIsland" ? mode === "auraWorld" : row.mode != null;
                   const isImmersiveRow = row.key === "auraWorld";
                   const title = isImmersiveRow && immersiveLabels ? immersiveLabels.title : row.title;
                   const subtitle = isImmersiveRow && immersiveLabels ? immersiveLabels.subtitle : row.subtitle;
@@ -162,7 +164,15 @@ export function AuraIsleTravelRite({ dock = "topRight" }: Props) {
                             : "border-transparent hover:border-white/[0.08] hover:bg-white/[0.04]"
                       }`}
                       style={{ borderWidth: "0.5px" }}
-                      onClick={() => can && row.mode && go(row.mode)}
+                      onClick={() => {
+                        if (row.action === "rePickIsland") {
+                          if (mode !== "auraWorld") return;
+                          resetWorldEntry();
+                          close();
+                          return;
+                        }
+                        if (can && row.mode) go(row.mode);
+                      }}
                     >
                       <div className="flex items-baseline justify-between gap-2">
                         <span

@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import { Wand2 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
+import { useEpisCodexStore } from "@/isle/aura/codex/episCodexStore";
+
 import { generatePoeticWorldNames, normalizeMetaName } from "./auraWorldIdentity";
 import { AURA_ISLAND_DEFAULT_NAMES } from "./auraWorldIslandTypes";
 import type { AuraIslandId } from "./auraWorldIslandTypes";
@@ -12,7 +14,6 @@ const ease = [0.22, 1, 0.36, 1] as const;
 export function AuraWorldNamingModal() {
   const open = useAuraWorldSelection((s) => s.showNamingModal);
   const worldId = useAuraWorldSelection((s) => s.selectedWorldId);
-  const entryFlowStage = useAuraWorldSelection((s) => s.entryFlowStage);
   const bumpPulse = useAuraWorldSelection((s) => s.bumpNamingEmissivePulse);
   const setOpen = useAuraWorldSelection((s) => s.setShowNamingModal);
   const setWorldMeta = useAuraWorldSelection((s) => s.setWorldMeta);
@@ -58,21 +59,32 @@ export function AuraWorldNamingModal() {
   };
 
   const finishNaming = () => {
+    const s = useAuraWorldSelection.getState();
+    const pending = s.pendingPostNamingMode;
+    const wid = worldId;
+
+    if (s.entryFlowStage === "naming") {
+      afterNamingCommitted();
+      if (pending === "aura" && wid) {
+        requestAnimationFrame(() => {
+          useEpisCodexStore.getState().openCodexForWorld(wid);
+        });
+      }
+    }
     setOpen(false);
     setDraft("");
-    if (entryFlowStage === "naming") afterNamingCommitted();
   };
 
   const onConfirm = () => {
     const name = normalizeMetaName(draft);
     if (name.length < 1) return;
-    setWorldMeta(worldId, { name, isDefaultName: false });
+    setWorldMeta(worldId, { name, isDefaultName: false, settlementStatus: "settled" });
     markGate(worldId);
     finishNaming();
   };
 
   const onKeepGentleDefault = () => {
-    setWorldMeta(worldId, { name: defaultSeed, isDefaultName: true });
+    setWorldMeta(worldId, { name: defaultSeed, isDefaultName: true, settlementStatus: "settled" });
     markGate(worldId);
     finishNaming();
   };

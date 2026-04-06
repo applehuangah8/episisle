@@ -6,8 +6,10 @@ import { writeAuraWorldSlugToUrl } from "@/isle/urlMode";
 
 import type { AuraIslandId } from "./auraWorldIslandTypes";
 import { worldSlugFromAuraIslandId } from "./auraWorldIslandTypes";
-import { seedDefaultWorldMeta } from "./auraWorldIdentity";
-import type { AuraWorldMeta } from "./auraWorldIdentity";
+import { isValidAuraWorldId, seedDefaultWorldMeta } from "./auraWorldIdentity";
+import type { AuraWorldMeta, AuraWorldSettlementStatus } from "./auraWorldIdentity";
+import { computeWorldEntryResume, readPersistedAuraIdentityFromStorage } from "./auraWorldResume";
+import { useEpisCodexStore } from "./codex/episCodexStore";
 
 /** Delay before clearing hover after pointer leaves mesh/label — reduces label flicker. */
 const HOVER_STICK_MS = 180;
@@ -82,8 +84,15 @@ type State = {
   bumpNamingEmissivePulse: () => void;
   tickNamingEmissivePulseDecay: (deltaSeconds: number) => void;
 
-  setWorldMeta: (worldId: string, meta: AuraWorldMeta) => void;
+  setWorldMeta: (worldId: string, meta: Partial<AuraWorldMeta>) => void;
   markNamingGateDone: (worldId: string) => void;
+  /** From in-world Focus chrome — return to Aura and remember preference. */
+  exitFocusToAura: () => void;
+  /**
+   * Wipe persisted data for the **currently entered** island only (identity, codex, Focus snapshot),
+   * then return to post-entry mode pick + naming flow as if the island were untouched.
+   */
+  clearEnteredIslandUserData: () => void;
 };
 
 const worldEntryIdleFixed = {
@@ -164,6 +173,10 @@ export const useAuraWorldSelection = create<State>()(
 
       afterNamingCommitted: () => {
         const pending = get().pendingPostNamingMode;
+        const wid = get().selectedWorldId;
+        if (wid && (pending === "aura" || pending === "focus")) {
+          get().setWorldMeta(wid, { lastInWorldMode: pending });
+        }
         if (pending === "aura") {
           set({
             pendingPostNamingMode: null,
@@ -183,19 +196,80 @@ export const useAuraWorldSelection = create<State>()(
         }
       },
 
-      completeFocusGateEntry: () =>
+      completeFocusGateEntry: () => {
+        const wid = get().selectedWorldId;
+        if (wid) get().setWorldMeta(wid, { lastInWorldMode: "focus" });
         set({
           showFocusEntryConfirm: false,
           entryFlowStage: "ready",
           viewMode: "focus",
           focusChromeExpanded: false,
-        }),
+        });
+      },
 
-      cancelFocusGateEntry: () =>
-        set({
-          showFocusEntryConfirm: false,
-          entryFlowStage: "chooseMode",
-        }),
+      cancelFocusGateEntry: () => {
+        const wid = get().selectedWorldId;
+        if (!wid) {
+          set({ showFocusEntryConfirm: false, entryFlowStage: "chooseMode" });
+          return;
+        }
+        const s = get();
+        const disk = readPersistedAuraIdentityFromStorage();
+        const mergedWorldMeta = { ...(disk?.worldMetaById ?? {}), ...s.worldMetaById };
+        const mergedGate = { ...(disk?.namingGateDoneByWorldId ?? {}), ...s.namingGateDoneByWorldId };
+        const resume = computeWorldEntryResume(wid, mergedWorldMeta, mergedGate);
+        if (resume.skipModePick) {
+          set({
+            showFocusEntryConfirm: false,
+            entryFlowStage: "ready",
+            viewMode: "aura",
+          });
+        } else {
+          set({
+            showFocusEntryConfirm: false,
+            entryFlowStage: "chooseMode",
+          });
+        }
+      },
+
+      exitFocusToAura: () => {
+        const wid = get().selectedWorldId;
+        if (wid) get().setWorldMeta(wid, { lastInWorldMode: "aura" });
+        set({ viewMode: "aura", focusChromeExpanded: false, showFocusEntryConfirm: false });
+      },
+
+      clearEnteredIslandUserData: () => {
+        const wid = get().selectedWorldId;
+        if (!wid || !get().isEntered) return;
+
+        useEpisCodexStore.getState().purgeWorldCodex(wid);
+
+        try {
+          if (typeof localStorage !== "undefined") {
+            localStorage.removeItem(`epis-isle-world-${wid}`);
+          }
+        } catch {
+          /* ignore */
+        }
+
+        set((s) => {
+          const worldMetaById = { ...s.worldMetaById };
+          delete worldMetaById[wid];
+          const namingGateDoneByWorldId = { ...s.namingGateDoneByWorldId };
+          delete namingGateDoneByWorldId[wid];
+          return {
+            worldMetaById,
+            namingGateDoneByWorldId,
+            entryFlowStage: "chooseMode",
+            viewMode: "aura",
+            showFocusEntryConfirm: false,
+            showNamingModal: false,
+            pendingPostNamingMode: null,
+            focusChromeExpanded: false,
+            auraPanelCollapsed: false,
+          };
+        });
+      },
 
       bumpNamingEmissivePulse: () =>
         set((s) => ({ namingEmissivePulse: Math.min(1, s.namingEmissivePulse + 0.38) })),
@@ -208,9 +282,16 @@ export const useAuraWorldSelection = create<State>()(
       },
 
       setWorldMeta: (worldId, meta) =>
-        set((s) => ({
-          worldMetaById: { ...s.worldMetaById, [worldId]: meta },
-        })),
+        set((s) => {
+          const prev = s.worldMetaById[worldId];
+          const base: AuraWorldMeta = isValidAuraWorldId(worldId)
+            ? seedDefaultWorldMeta(worldId)
+            : { name: "", isDefaultName: true, settlementStatus: "floating" };
+          const merged = { ...base, ...prev, ...meta } satisfies AuraWorldMeta;
+          return {
+            worldMetaById: { ...s.worldMetaById, [worldId]: merged },
+          };
+        }),
 
       markNamingGateDone: (worldId) =>
         set((s) => ({
@@ -254,19 +335,68 @@ export const useAuraWorldSelection = create<State>()(
           return;
         }
         const wid = id as string;
-        set((s) => {
-          const nextMeta = { ...s.worldMetaById };
-          if (!nextMeta[wid]) nextMeta[wid] = seedDefaultWorldMeta(id);
-          return {
-            worldMetaById: nextMeta,
-            isEntering: false,
-            isEntered: true,
-            enterPhase: 1,
-            entryBloomBoost: 1,
-            entryFlowStage: "chooseMode",
-            showNamingModal: false,
+        const s = get();
+        const disk = readPersistedAuraIdentityFromStorage();
+        const mergedWorldMeta = { ...(disk?.worldMetaById ?? {}), ...s.worldMetaById };
+        const mergedGate = { ...(disk?.namingGateDoneByWorldId ?? {}), ...s.namingGateDoneByWorldId };
+
+        const nextMeta = { ...mergedWorldMeta };
+        if (!nextMeta[wid]) nextMeta[wid] = seedDefaultWorldMeta(id);
+
+        const resume = computeWorldEntryResume(wid, nextMeta, mergedGate);
+        if (resume.persistLastInWorldMode != null) {
+          const r = nextMeta[wid]!;
+          nextMeta[wid] = { ...r, lastInWorldMode: resume.persistLastInWorldMode };
+        }
+
+        const common = {
+          worldMetaById: nextMeta,
+          namingGateDoneByWorldId: mergedGate,
+          isEntering: false,
+          isEntered: true,
+          enterPhase: 1,
+          entryBloomBoost: 1,
+          showNamingModal: false,
+          pendingPostNamingMode: null,
+        } as const;
+
+        if (resume.skipModePick && resume.lastInWorldMode === "aura") {
+          set({
+            ...common,
+            entryFlowStage: "ready",
+            viewMode: "aura",
             showFocusEntryConfirm: false,
-          };
+          });
+          try {
+            writeAuraWorldSlugToUrl(worldSlugFromAuraIslandId(id));
+          } catch {
+            /* ignore */
+          }
+          requestAnimationFrame(() => {
+            useEpisCodexStore.getState().openCodexForWorld(wid);
+          });
+          return;
+        }
+
+        if (resume.skipModePick && resume.lastInWorldMode === "focus") {
+          set({
+            ...common,
+            entryFlowStage: "focusGate",
+            viewMode: "aura",
+            showFocusEntryConfirm: true,
+          });
+          try {
+            writeAuraWorldSlugToUrl(worldSlugFromAuraIslandId(id));
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
+
+        set({
+          ...common,
+          entryFlowStage: "chooseMode",
+          showFocusEntryConfirm: false,
         });
         try {
           writeAuraWorldSlugToUrl(worldSlugFromAuraIslandId(id));
@@ -299,24 +429,62 @@ export const useAuraWorldSelection = create<State>()(
     }),
     {
       name: "epis-aura-world-identity-v1",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         worldMetaById: s.worldMetaById,
         namingGateDoneByWorldId: s.namingGateDoneByWorldId,
       }),
+      migrate: (persisted, fromVersion) => {
+        const p = persisted as {
+          worldMetaById?: Partial<Record<string, AuraWorldMeta>>;
+          namingGateDoneByWorldId?: Partial<Record<string, boolean>>;
+        };
+        if (fromVersion < 2) {
+          const worldMetaById = { ...p.worldMetaById };
+          const gate = p.namingGateDoneByWorldId ?? {};
+          for (const [wid, done] of Object.entries(gate)) {
+            if (!done) continue;
+            const row = worldMetaById[wid];
+            if (!row || row.settlementStatus) continue;
+            worldMetaById[wid] = { ...row, settlementStatus: "settled" };
+          }
+          return {
+            worldMetaById,
+            namingGateDoneByWorldId: p.namingGateDoneByWorldId ?? {},
+          };
+        }
+        return p as {
+          worldMetaById: Partial<Record<string, AuraWorldMeta>>;
+          namingGateDoneByWorldId: Partial<Record<string, boolean>>;
+        };
+      },
     }
   )
 );
 
 /** Snapshot of `worldMeta` for the currently entered world (UX / bindings). */
-export type AuraEnteredWorldMetaUx = { id: string; name: string; isDefaultName: boolean };
+export type AuraEnteredWorldMetaUx = {
+  id: string;
+  name: string;
+  isDefaultName: boolean;
+  settlementStatus?: AuraWorldSettlementStatus;
+  lastInWorldMode?: "aura" | "focus";
+};
 
 export function readEnteredWorldMetaForUx(): AuraEnteredWorldMetaUx | null {
   const s = useAuraWorldSelection.getState();
   if (!s.isEntered || !s.selectedWorldId) return null;
   const id = s.selectedWorldId;
   const row = s.worldMetaById[id];
-  if (row) return { id, name: row.name, isDefaultName: row.isDefaultName };
-  return { id, ...seedDefaultWorldMeta(id as AuraIslandId) };
+  if (row)
+    return {
+      id,
+      name: row.name,
+      isDefaultName: row.isDefaultName,
+      settlementStatus: row.settlementStatus,
+      lastInWorldMode: row.lastInWorldMode,
+    };
+  const seeded = seedDefaultWorldMeta(id as AuraIslandId);
+  return { id, ...seeded };
 }

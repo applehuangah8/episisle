@@ -2,7 +2,6 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, Select, Selection, SelectiveBloom } from "@react-three/postprocessing";
 import { OrbitControls, RoundedBox } from "@react-three/drei";
 import React, {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -436,55 +435,25 @@ function useHarborLakeGradientMap() {
 }
 
 /**
- * Harbor “second ring” — lake read: mint→teal gradient, wet spec (clearcoat), slow ripples.
- * Avoids `transmission` here (fragile with layered transparent water + some GPUs); still uses
- * MeshPhysicalMaterial with requested roughness / thickness feel via clearcoat + ior.
+ * Harbor “second ring” — lake read: mint→teal gradient, wet spec (clearcoat).
+ * No `onBeforeCompile`: Three r161+ renamed / reorganized `normal_fragment_maps`; patching it
+ * left shaders uncompilable on many drivers. Kept a conservative MeshPhysicalMaterial only.
  */
 function HarborLakePhysicalRing({ gradientMap }: { gradientMap: THREE.Texture | null }) {
-  const uWaterTime = useRef({ value: 0 });
-
-  const onBeforeCompile = useCallback((shader: { uniforms: { uWaterTime?: { value: number } }; fragmentShader: string }) => {
-    shader.uniforms.uWaterTime = uWaterTime.current;
-    shader.fragmentShader = `uniform float uWaterTime;\n${shader.fragmentShader}`.replace(
-      "#include <normal_fragment_maps>",
-      `#include <normal_fragment_maps>
-        {
-          vec2 wuv = vUv * 6.8;
-          float wt = uWaterTime * 0.38;
-          float r1 = sin(wuv.x * 13.5 + wt) * cos(wuv.y * 11.2 - wt * 0.72);
-          float r2 = sin(wuv.x * 20.0 - wt * 0.48) * sin(wuv.y * 16.5 + wt * 0.55);
-          float rip = r1 * 0.052 + r2 * 0.032;
-          float rip2 = sin(wuv.x * 28.0 + wuv.y * 24.0 + wt * 0.6) * 0.018;
-          normal = normalize(normal + vec3(rip + rip2, rip * 0.55 - rip2 * 0.8, 0.0));
-        }
-        `
-    );
-  }, []);
-
-  useFrame(({ clock }) => {
-    uWaterTime.current.value = clock.elapsedTime;
-  });
-
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
       <planeGeometry args={[8.8, 7.6]} />
       <meshPhysicalMaterial
         map={gradientMap ?? undefined}
         color="#eaf6f6"
-        roughness={0.1}
+        roughness={0.14}
         metalness={0}
-        transmission={0}
-        thickness={1.5}
-        ior={1.33}
         transparent
         opacity={0.94}
         side={THREE.DoubleSide}
         clearcoat={0.42}
         clearcoatRoughness={0.12}
-        attenuationColor={HARBOR_LAKE_MINT}
-        attenuationDistance={2.4}
         envMapIntensity={0.55}
-        onBeforeCompile={onBeforeCompile}
       />
     </mesh>
   );

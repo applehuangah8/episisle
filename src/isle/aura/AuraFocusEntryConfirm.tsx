@@ -55,6 +55,9 @@ export function AuraFocusEntryConfirm() {
     if (isFocusGate) {
       completeFocusGateEntry();
     } else {
+      if (worldId) {
+        useAuraWorldSelection.getState().setWorldMeta(worldId, { lastInWorldMode: "focus" });
+      }
       setOpen(false);
       setFocusChrome(false);
       setMode("focus");
@@ -124,7 +127,7 @@ export function AuraFocusEntryConfirm() {
             className="mx-auto mt-5 max-w-sm text-center text-[11px] leading-relaxed"
             style={{ color: "rgba(68,78,74,0.46)" }}
           >
-            確認後進入專注畫布；可從左下選單回到探索或返回選島。
+            確認後進入專注畫布；可從左下選單回到 Aura 或返回選島。
           </p>
         ) : null}
         <div className="mt-8 flex items-center justify-center gap-10">

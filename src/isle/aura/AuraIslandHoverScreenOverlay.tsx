@@ -3,6 +3,7 @@ import { useCallback, useId, useState } from "react";
 import type { AuraIslandId } from "./auraWorldIslandTypes";
 import {
   getAuraIslandPlateNameUpper,
+  getAuraIslandSettledModeSuffix,
   getAuraIslandStatusAccentColor,
   getAuraIslandUiStatus,
 } from "./auraIslandMetadata";
@@ -78,7 +79,10 @@ export function AuraIslandHoverScreenOverlay() {
   const geo = anchor ? LEAD_GEOMETRY[anchor.id] : null;
   const plateName = anchor ? getAuraIslandPlateNameUpper(anchor.id) : "";
   const status = anchor ? getAuraIslandUiStatus(anchor.id) : "floating";
-  const statusLabel = status === "exploring" ? "exploring" : "floating";
+  const statusLabel =
+    status === "settled"
+      ? `settled${anchor ? getAuraIslandSettledModeSuffix(anchor.id) : ""}`
+      : "floating";
   const statusColor = anchor ? getAuraIslandStatusAccentColor(anchor.id) : "#153B78";
 
   if (isEnteredWorld || !anchor || !geo) return null;

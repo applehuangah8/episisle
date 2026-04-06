@@ -6,7 +6,7 @@ import { useAuraWorldSelection } from "./auraWorldSelectionStore";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-/** 登島後：選擇「探索」或 Focus，再進入命名。 */
+/** 登島後：選擇 Aura 或 Focus，再進入命名。 */
 export function AuraWorldModePickPanel() {
   const stage = useAuraWorldSelection((s) => s.entryFlowStage);
   const worldId = useAuraWorldSelection((s) => s.selectedWorldId);
@@ -62,15 +62,12 @@ export function AuraWorldModePickPanel() {
         >
           以何種方式停留？
         </p>
-        <p className="mt-2 text-center text-[12px] leading-relaxed" style={{ color: "rgba(76,86,82,0.5)" }}>
-          選定後為這方島取名；之後可隨時在邊欄切換探索與 Focus。
-        </p>
 
         <div className="mt-9 grid grid-cols-2 gap-4">
           <button
             type="button"
             onClick={() => choose("aura")}
-            className="group relative overflow-hidden rounded-2xl border border-[rgba(66,104,133,0.18)] bg-white/[0.08] px-4 py-5 text-left transition-[background,box-shadow,border-color] duration-200 hover:bg-white/[0.16] hover:shadow-[0_12px_40px_-24px_rgba(66,104,133,0.25)]"
+            className="group relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-[rgba(66,104,133,0.18)] bg-white/[0.08] px-4 py-5 text-center transition-[background,box-shadow,border-color] duration-200 hover:bg-white/[0.16] hover:shadow-[0_12px_40px_-24px_rgba(66,104,133,0.25)]"
             style={{ borderWidth: "0.5px" }}
           >
             <span
@@ -80,24 +77,30 @@ export function AuraWorldModePickPanel() {
                 color: "#426885",
               }}
             >
-              探索
+              Aura
+            </span>
+            <span className="mt-2.5 text-[9px] font-normal tracking-[0.14em] text-[rgba(78,88,84,0.48)]">
+              圖鑑收藏
             </span>
           </button>
 
           <button
             type="button"
             onClick={() => choose("focus")}
-            className="group relative overflow-hidden rounded-2xl border border-white/[0.18] bg-white/[0.06] px-4 py-5 text-left transition-[background,box-shadow,border-color] duration-200 hover:bg-white/[0.14] hover:shadow-[0_12px_40px_-24px_rgba(42,52,48,0.18)]"
+            className="group relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/[0.18] bg-white/[0.06] px-4 py-5 text-center transition-[background,box-shadow,border-color] duration-200 hover:bg-white/[0.14] hover:shadow-[0_12px_40px_-24px_rgba(42,52,48,0.18)]"
             style={{ borderWidth: "0.5px" }}
           >
             <span
               className="block text-[20px] font-normal leading-none tracking-[0.12em]"
               style={{
                 fontFamily: "'Cormorant Garamond', Georgia, serif",
-                color: "rgba(34,42,40,0.9)",
+                color: "#87A7B9",
               }}
             >
               Focus
+            </span>
+            <span className="mt-2.5 text-[9px] font-normal tracking-[0.14em] text-[rgba(78,88,84,0.48)]">
+              專注規劃
             </span>
           </button>
         </div>

@@ -1,9 +1,19 @@
 import type { AuraIslandId } from "./auraWorldIslandTypes";
 import { AURA_ISLAND_DEFAULT_NAMES } from "./auraWorldIslandTypes";
 
+/** Persisted with island name in `worldMetaById` — drives hover plate status line. */
+export type AuraWorldSettlementStatus = "floating" | "settled";
+
 export type AuraWorldMeta = {
   name: string;
   isDefaultName: boolean;
+  /**
+   * Claimed isle / naming flow complete → labels show `settled`.
+   * Omitted in older saves: derived from {@link AuraWorldMeta.isDefaultName} or legacy naming gate.
+   */
+  settlementStatus?: AuraWorldSettlementStatus;
+  /** Last completed Aura vs Focus surface (named worlds skip mode pick on re-entry). */
+  lastInWorldMode?: "aura" | "focus";
 };
 
 /** Single-world shape (id included for clarity). */
@@ -48,6 +58,7 @@ export function seedDefaultWorldMeta(id: AuraIslandId): AuraWorldMeta {
   return {
     name: AURA_ISLAND_DEFAULT_NAMES[id],
     isDefaultName: true,
+    settlementStatus: "floating",
   };
 }
 

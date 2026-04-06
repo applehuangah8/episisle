@@ -2,7 +2,7 @@ import type { AuraIslandId } from "./auraWorldIslandTypes";
 import { AURA_ISLAND_DEFAULT_NAMES } from "./auraWorldIslandTypes";
 import { useAuraWorldSelection } from "./auraWorldSelectionStore";
 
-export type AuraIslandUiStatus = "floating" | "exploring";
+export type AuraIslandUiStatus = "floating" | "settled";
 
 /** Resolved label for Layer 2 UI / plates (includes persisted world name). */
 export function getResolvedAuraIslandDisplayName(id: AuraIslandId): string {
@@ -22,16 +22,29 @@ export function getAuraIslandCustomName(id: AuraIslandId): string | null {
 }
 
 /**
- * Whether the player has an active save / session on this island.
- * `exploring` → overlay shows `status: exploring`; else `status: floating` (lowercase in UI).
+ * Islands the player has claimed via naming (or renamed later): plate shows `settled`.
+ * Source: `worldMetaById[id].settlementStatus` (persisted with name) and legacy `namingGateDoneByWorldId`.
  */
-export function getAuraIslandHasSave(_id: AuraIslandId): boolean {
-  // TODO: wire to save slot or island visit state
-  return false;
+export function getAuraIslandUiStatus(id: AuraIslandId): AuraIslandUiStatus {
+  const s = useAuraWorldSelection.getState();
+  const row = s.worldMetaById[id];
+  if (row?.settlementStatus === "settled") return "settled";
+  if (row?.settlementStatus === "floating") return "floating";
+  if (s.namingGateDoneByWorldId[id] === true) return "settled";
+  if (row && !row.isDefaultName) return "settled";
+  return "floating";
 }
 
-export function getAuraIslandUiStatus(id: AuraIslandId): AuraIslandUiStatus {
-  return getAuraIslandHasSave(id) ? "exploring" : "floating";
+/**
+ * Suffix after the `settled` status line on the archipelago hover plate:
+ * last immersive layer chosen (from persisted `lastInWorldMode`).
+ */
+export function getAuraIslandSettledModeSuffix(id: AuraIslandId): string {
+  if (getAuraIslandUiStatus(id) !== "settled") return "";
+  const last = useAuraWorldSelection.getState().worldMetaById[id]?.lastInWorldMode;
+  if (last === "focus") return " 📓 F";
+  if (last === "aura") return " 🪽 A";
+  return "";
 }
 
 export function getAuraIslandTitleLine(id: AuraIslandId): string {
