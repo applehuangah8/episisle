@@ -164,6 +164,13 @@ export function Downtown() {
   const setMode = useStore((s) => s.setAestheticsHubMode);
   const collapsed = useStore((s) => s.downtownPanelCollapsed);
   const setCollapsed = useStore((s) => s.setDowntownPanelCollapsed);
+  const focusModeActive = useStore((s) => s.focusModeActive);
+  const focusRealm = useStore((s) => s.focusRealm);
+  /** 須為主列 flex 直接子項，{@link downtownPanelWidthPercent} 的 % 才會相對整欄計算（不可再外包一層 shrink-0） */
+  const downtownStackZ =
+    focusModeActive && (focusRealm === "town" || focusRealm === "studio")
+      ? "z-[110]"
+      : "z-[40]";
   const widthPct = useStore((s) => s.downtownPanelWidthPercent);
   const scale = useStore((s) => s.downtownContentScale);
   const setScale = useStore((s) => s.setDowntownContentScale);
@@ -285,7 +292,7 @@ export function Downtown() {
 
   return (
     <div
-      className="relative z-[40] flex min-h-0 shrink-0 flex-row"
+      className={`relative flex min-h-0 shrink-0 flex-row ${downtownStackZ}`}
       style={{
         width: `${widthPct}%`,
         minWidth: 260 + HANDLE_W_PX,

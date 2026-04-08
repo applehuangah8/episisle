@@ -15,12 +15,26 @@ function MainSplitLayout({ canvasSurfaceRef }: { canvasSurfaceRef: RefObject<HTM
   const focusRealm = useStore((s) => s.focusRealm);
   /** 原野專注時全幅畫布；城鎮／Studio 專注時保留 Downtown，規劃格積木才不會「被藏起來」。 */
   const showDowntown = !focusModeActive || focusRealm === "town" || focusRealm === "studio";
+  /**
+   * 專注 · 城鎮／Studio：視角會拉近，主畫布積木常「畫在」右欄螢幕區上。若整欄畫布子樹 z-index 仍高於
+   * Downtown，規劃格標題列的 pointer 會被畫布吃掉，表現成拖不動或放開後像卡回同一處。
+   * 此時改為 Downtown 疊在畫布之上；HUD 改為同層絕對定位且寬度＝左欄寬，才不會被右欄蓋住。
+   */
+  const focusTownStudio =
+    focusModeActive && (focusRealm === "town" || focusRealm === "studio");
+  const canvasColumnZ = focusTownStudio ? "z-0" : "z-[100]";
+
   return (
-    <div data-epis-main-column className="flex h-full min-h-0 w-full flex-row">
-      {/* z-index 高於右欄，讓身分卡拖曳到 Downtown 上方時仍看得見（右欄維持可點擊，因畫布僅佔左欄寬） */}
-      <div className="relative z-[100] min-h-0 min-w-0 flex-1 overflow-visible">
+    <div data-epis-main-column className="relative flex h-full min-h-0 w-full flex-row">
+      {/**
+       * HUD 放在左欄內 `inset-0`，寬度永遠等於畫布欄，避免另一層絕對定位用錯 %／ResizeObserver 蓋到右欄 Downtown。
+       * 與 {@link Downtown} 的堆疊高低仍由左欄 `z-*` vs Downtown 根節點 `z-[40]|z-[110]` 決定（Downtown 須維持主列直接子項）。
+       */}
+      <div className={`relative min-h-0 min-w-0 flex-1 overflow-visible ${canvasColumnZ}`}>
         <Canvas ref={canvasSurfaceRef as never} />
-        <HUD canvasSurfaceRef={canvasSurfaceRef} />
+        <div className="pointer-events-none absolute inset-0 z-[130] min-h-0 min-w-0">
+          <HUD canvasSurfaceRef={canvasSurfaceRef} />
+        </div>
       </div>
       {showDowntown ? <Downtown /> : null}
     </div>

@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   type CSSProperties,
@@ -19,6 +20,7 @@ import { WorldContainer } from "@/canvas/WorldContainer";
 import { useViewport } from "@/canvas/useViewport";
 import { BlockRenderer } from "@/components/BlockRenderer";
 import { IdentityBlock } from "@/components/IdentityBlock";
+import { useStore } from "@/store/useStore";
 
 function assignRef<T>(r: Ref<T> | undefined, node: T | null) {
   if (r == null) return;
@@ -78,6 +80,12 @@ export const Canvas = forwardRef<HTMLDivElement>(function Canvas(_, ref) {
     onPointerMove,
     onPointerUp,
   } = useViewport(rootRef, { spacePanHeldRef });
+
+  useLayoutEffect(() => {
+    const { setCanvasClientToWorld } = useStore.getState();
+    setCanvasClientToWorld(toWorldFromClient);
+    return () => setCanvasClientToWorld(null);
+  }, [toWorldFromClient]);
 
   const worldStyle: CSSProperties = {
     ...transformStyle,

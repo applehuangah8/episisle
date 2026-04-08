@@ -22,7 +22,7 @@ import {
   getWildZone,
 } from "@/canvas/districtLayout";
 import { snapWildPlacementsAfterFocusWild } from "@/canvas/wildPlacementSnap";
-import { detectDistrictForRectCenterWorld } from "@/canvas/worldDistrictHitTest";
+import { districtTypeForPlacementRect } from "@/canvas/worldDistrictHitTest";
 import { DOWNTOWN_BLANK_WORLD_H, DOWNTOWN_BLANK_WORLD_W } from "@/core/downtownBlankBounds";
 import { normalizeLeafAccent } from "@/core/accentColor";
 import {
@@ -345,6 +345,13 @@ export interface EpisState {
   setViewport: (v: Partial<Viewport>) => void;
   panBy: (dx: number, dy: number) => void;
   zoomAtScreen: (screenX: number, screenY: number, nextScale: number) => void;
+  /**
+   * 由 Canvas 內 `useViewport` 註冊，與主畫布 ref／視角同步；Downtown 拖放時勿自算 `querySelector` 以免與實際投影不一致。
+   */
+  canvasClientToWorld: ((clientX: number, clientY: number) => { x: number; y: number }) | null;
+  setCanvasClientToWorld: (
+    fn: ((clientX: number, clientY: number) => { x: number; y: number }) | null
+  ) => void;
   setWorld: (payload: SetWorldPayload) => void;
   setSelectedPlacementId: (id: PlacementID | null) => void;
   setViewMode: (mode: AppViewMode) => void;
@@ -514,6 +521,9 @@ export const useStore = create<EpisState>()(
       width: DOWNTOWN_PLAN_FRAME_DEFAULT_WIDTH_PX,
     },
   },
+
+  canvasClientToWorld: null,
+  setCanvasClientToWorld: (fn) => set({ canvasClientToWorld: fn }),
 
   setWorldDistrictZones: (worldDistrictZones) => set({ worldDistrictZones }),
 
@@ -1083,6 +1093,9 @@ export const useStore = create<EpisState>()(
       (p0.parentContainerId === DOWNTOWN_IG_CONTAINER_ID ||
         p0.parentContainerId === DOWNTOWN_YT_CONTAINER_ID ||
         p0.parentContainerId === DOWNTOWN_BLANK_CONTAINER_ID);
+    if (!Number.isFinite(worldCenterX) || !Number.isFinite(worldCenterY)) {
+      return;
+    }
     set((s) => {
       if (isIdentityPlacementId(placementId)) return s;
       const p = s.placements[placementId];
@@ -1097,7 +1110,8 @@ export const useStore = create<EpisState>()(
       );
       let nx = worldCenterX - w / 2;
       let ny = worldCenterY - h / 2;
-      const bounds = getCanvasWorldBackgroundRect(s.worldDistrictZones, 14);
+      /** 過緊的 clamp 會在視角拉近、螢幕換算些微誤差時把每次放手都壓到邊界同一點，看起來像「永遠掉正中且卡住」 */
+      const bounds = getCanvasWorldBackgroundRect(s.worldDistrictZones, 120);
       nx = Math.min(bounds.x + bounds.width - w, Math.max(bounds.x, nx));
       ny = Math.min(bounds.y + bounds.height - h, Math.max(bounds.y, ny));
       let nextP: Placement = {
@@ -1111,8 +1125,7 @@ export const useStore = create<EpisState>()(
           height: h,
         },
       };
-      const hint = detectDistrictForRectCenterWorld(placementToRect(nextP), s.worldDistrictZones);
-      const district = hint !== "neutral" ? hint : nextP.district;
+      const district = districtTypeForPlacementRect(placementToRect(nextP), s.worldDistrictZones);
       nextP = {
         ...nextP,
         district,

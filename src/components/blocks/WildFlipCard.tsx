@@ -28,7 +28,6 @@ export function WildFlipCard({ model }: { model: RenderBlock }) {
   const deletePlacementAndBlock = useStore((s) => s.deletePlacementAndBlock);
   const duplicatePlacement = useStore((s) => s.duplicatePlacement);
   const setDistrict = useStore((s) => s.setDistrict);
-  const setSelectedPlacementId = useStore((s) => s.setSelectedPlacementId);
 
   const toggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,6 +46,7 @@ export function WildFlipCard({ model }: { model: RenderBlock }) {
           className="absolute inset-0 flex min-h-0 flex-col overflow-hidden rounded-[22px] border-[0.5px] border-[#b8c9c4]/45 bg-gradient-to-br from-[var(--color-wild-block)] to-[#ddece8]/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_8px_24px_-12px_rgba(60,90,82,0.12)] [backface-visibility:hidden] [transform-style:preserve-3d]"
           style={{
             WebkitBackfaceVisibility: "hidden",
+            pointerEvents: flipped ? "none" : "auto",
             backgroundImage: `
               radial-gradient(ellipse 100% 80% at 12% 10%, rgba(255,255,255,0.55) 0%, transparent 50%),
               radial-gradient(ellipse 75% 60% at 88% 85%, rgba(120,175,155,0.18) 0%, transparent 52%),
@@ -55,14 +55,7 @@ export function WildFlipCard({ model }: { model: RenderBlock }) {
           }}
         >
           <div className="flex shrink-0 items-start justify-between gap-2 p-3">
-            <div
-              data-epis-no-drag
-              className="min-w-0 flex-1"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setSelectedPlacementId(model.placement.id);
-              }}
-            >
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-medium uppercase tracking-[0.38em] text-epis-ink/45">
                 The Wild
               </p>
@@ -133,6 +126,7 @@ export function WildFlipCard({ model }: { model: RenderBlock }) {
           style={{
             WebkitBackfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
+            pointerEvents: flipped ? "auto" : "none",
           }}
         >
           <div className="relative flex h-full min-h-0 flex-col">

@@ -1,5 +1,10 @@
 import { DEFAULT_DISTRICT_ZONES } from "@/canvas/districtLayout";
-import type { DistrictZoneDefinition, DistrictZoneHint, WorldRect } from "@/core/types";
+import type {
+  DistrictType,
+  DistrictZoneDefinition,
+  DistrictZoneHint,
+  WorldRect,
+} from "@/core/types";
 
 /**
  * 與地景層一致：重疊時 Town（IG/YT）優先於 Wild，再 Studio。
@@ -25,6 +30,48 @@ export function hitTestDistrictsAtWorldPoint(
   return "neutral";
 }
 
+/**
+ * 嚴格矩形未命中時的回退（僅在無法取得世界座標時使用）。
+ * 預設仍為 wild；有座標時請改 {@link districtTypeForPlacementRect}。
+ */
+export function districtTypeFromZoneHint(hint: DistrictZoneHint): DistrictType {
+  return hint === "neutral" ? "wild" : hint;
+}
+
+/** 窄縫（例如 Town 底緣與 Studio 頂之間、或大積木中心落在矩形外）用輕微外擴再判，避免 neutral 一律變 wild 誤判成野域卡 */
+const NEUTRAL_RESOLVE_PAD_WORLD_PX = 64;
+
+export function resolveDistrictTypeFromNeutralAtPoint(
+  hint: DistrictZoneHint,
+  worldX: number,
+  worldY: number,
+  zones: DistrictZoneDefinition[]
+): DistrictType {
+  if (hint !== "neutral") return hint;
+  const pad = NEUTRAL_RESOLVE_PAD_WORLD_PX;
+  for (const id of HIT_PRIORITY) {
+    const z = zones.find((zz) => zz.id === id);
+    if (!z) continue;
+    const inside =
+      worldX >= z.x - pad &&
+      worldX <= z.x + z.width + pad &&
+      worldY >= z.y - pad &&
+      worldY <= z.y + z.height + pad;
+    if (inside) return z.id;
+  }
+  return "wild";
+}
+
+export function districtTypeForPlacementRect(
+  rect: { x: number; y: number; width: number; height: number },
+  zones: DistrictZoneDefinition[]
+): DistrictType {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const hint = hitTestDistrictsAtWorldPoint(cx, cy, zones);
+  return resolveDistrictTypeFromNeutralAtPoint(hint, cx, cy, zones);
+}
+
 export function resolveDistrictAtWorldPoint(
   worldX: number,
   worldY: number,
@@ -42,6 +89,40 @@ export function detectDistrictForRectCenterWorld(
     rect.y + rect.height / 2,
     zones
   );
+}
+
+const isTownDistrict = (d: DistrictType): boolean => d === "instagram" || d === "youtube";
+
+/**
+ * 拖曳時 Wild 與 Town（IG/YT）邊界極窄且矩形重疊，中心點微移會在兩區之間來回判斷，
+ * 造成 district 狂切換、外殼與翻面卡不斷 remount。用世界座標遲滯：要進 Town 需中心再偏東一截仍為 Town；
+ * 要進 Wild 需再偏西一截仍為 Wild。放開時用 {@link districtTypeForPlacementRect} 與嚴格命中校正。
+ */
+export function districtTypeFromRectWithDragHysteresis(
+  rect: { x: number; y: number; width: number; height: number },
+  zones: DistrictZoneDefinition[],
+  currentDistrict: DistrictType,
+  hysteresisWorldPx: number = 40
+): DistrictType {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const raw = districtTypeForPlacementRect(rect, zones);
+  if (raw === currentDistrict) return currentDistrict;
+
+  if (currentDistrict === "wild" && isTownDistrict(raw)) {
+    const dcx = cx + hysteresisWorldPx;
+    const dHint = hitTestDistrictsAtWorldPoint(dcx, cy, zones);
+    const deeper = resolveDistrictTypeFromNeutralAtPoint(dHint, dcx, cy, zones);
+    return isTownDistrict(deeper) ? deeper : "wild";
+  }
+  if (isTownDistrict(currentDistrict) && raw === "wild") {
+    const dcx = cx - hysteresisWorldPx;
+    const dHint = hitTestDistrictsAtWorldPoint(dcx, cy, zones);
+    const deeper = resolveDistrictTypeFromNeutralAtPoint(dHint, dcx, cy, zones);
+    return deeper === "wild" ? "wild" : currentDistrict;
+  }
+
+  return raw;
 }
 
 export function isWorldPointInRect(wx: number, wy: number, r: WorldRect): boolean {

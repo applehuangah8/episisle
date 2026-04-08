@@ -56,7 +56,6 @@ export function DowntownPlanSlotPreview({
   return (
     <div
       data-epis-downtown-slot-preview
-      data-epis-dblclick-edit
       className={`relative flex h-full min-h-0 w-full select-none flex-col overflow-hidden rounded-[14px] border text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] ${
         yt
           ? "border-red-900/35 bg-gradient-to-br from-neutral-900/92 via-neutral-950/95 to-black/90"

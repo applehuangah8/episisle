@@ -140,7 +140,6 @@ export function TownFlipCard({ model, Cmp }: { model: RenderBlock; Cmp: BlockCom
   const deletePlacementAndBlock = useStore((s) => s.deletePlacementAndBlock);
   const duplicatePlacement = useStore((s) => s.duplicatePlacement);
   const setDistrict = useStore((s) => s.setDistrict);
-  const setSelectedPlacementId = useStore((s) => s.setSelectedPlacementId);
 
   const toggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -159,6 +158,7 @@ export function TownFlipCard({ model, Cmp }: { model: RenderBlock; Cmp: BlockCom
           className="absolute inset-0 flex min-h-0 flex-col overflow-hidden rounded-[20px] border-[0.5px] border-[#d8d0c4]/55 bg-gradient-to-br from-white/58 to-[#f4efe6]/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_28px_-14px_rgba(88,72,56,0.08)] [backface-visibility:hidden] [transform-style:preserve-3d]"
           style={{
             WebkitBackfaceVisibility: "hidden",
+            pointerEvents: flipped ? "none" : "auto",
             backgroundImage: `
               radial-gradient(ellipse 115% 85% at 8% 12%, rgba(255,252,247,0.95) 0%, transparent 52%),
               radial-gradient(ellipse 90% 70% at 92% 78%, rgba(230,200,165,0.2) 0%, transparent 48%),
@@ -167,14 +167,7 @@ export function TownFlipCard({ model, Cmp }: { model: RenderBlock; Cmp: BlockCom
           }}
         >
           <div className="flex shrink-0 items-start justify-between gap-2 p-3">
-            <div
-              data-epis-no-drag
-              className="min-w-0 flex-1"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setSelectedPlacementId(model.placement.id);
-              }}
-            >
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-medium uppercase tracking-[0.38em] text-epis-ink/45">
                 Downtown
               </p>
@@ -245,6 +238,7 @@ export function TownFlipCard({ model, Cmp }: { model: RenderBlock; Cmp: BlockCom
           style={{
             WebkitBackfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
+            pointerEvents: flipped ? "auto" : "none",
           }}
         >
           <div className="relative flex h-full min-h-0 flex-col">

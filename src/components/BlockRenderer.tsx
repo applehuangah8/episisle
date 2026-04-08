@@ -12,7 +12,11 @@ import {
 } from "@/canvas/igClientHit";
 import { isClientPointInsideDowntownSlotRoot } from "@/canvas/igClientHit";
 import { isClientPointInsideMuseePortalInner } from "@/canvas/museePortalClientHit";
-import { detectDistrictForRectCenterWorld } from "@/canvas/worldDistrictHitTest";
+import {
+  detectDistrictForRectCenterWorld,
+  districtTypeForPlacementRect,
+  districtTypeFromRectWithDragHysteresis,
+} from "@/canvas/worldDistrictHitTest";
 import {
   DOWNTOWN_BLANK_CONTAINER_ID,
   DOWNTOWN_IG_CONTAINER_ID,
@@ -92,10 +96,6 @@ function districtShellAnimate(d: DistrictType): Record<string, string | number> 
 
 function isTownDistrict(d: DistrictType): boolean {
   return d === "instagram" || d === "youtube";
-}
-
-function districtFromZoneHint(zone: ReturnType<typeof detectDistrictForRectCenterWorld>): DistrictType {
-  return zone === "neutral" ? "wild" : zone;
 }
 
 function BlockContent({
@@ -180,8 +180,15 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
     if (!placement) return;
     placementRef.current = placement;
     if (!dragging) {
-      x.set(placement.position.x);
-      y.set(placement.position.y);
+      const px = placement.position.x;
+      const py = placement.position.y;
+      if (Number.isFinite(px) && Number.isFinite(py)) {
+        x.set(px);
+        y.set(py);
+      } else {
+        x.set(0);
+        y.set(0);
+      }
     }
   }, [placement, placement?.position.x, placement?.position.y, dragging, x, y]);
 
@@ -211,8 +218,7 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
 
   const syncDistrictFromRect = useCallback(
     (rect: { x: number; y: number; width: number; height: number }) => {
-      const zone = detectDistrictForRectCenterWorld(rect, zonesRef.current);
-      const next = districtFromZoneHint(zone);
+      const next = districtTypeForPlacementRect(rect, zonesRef.current);
       const pid = placementRef.current?.id;
       if (!pid) return;
       if (next !== placementRef.current?.district) {
@@ -229,13 +235,7 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
       if (editingHere) return;
       if (e.button !== 0) return;
       const t = e.target as HTMLElement;
-      /** 可雙擊編輯文字區：不掛拖曳，避免吃掉 dblclick（detail 在部分 Pointer 路徑不可靠） */
-      if (t.closest("[data-epis-dblclick-edit]")) {
-        e.stopPropagation();
-        setSelectedPlacementId(placementId);
-        return;
-      }
-      /** 雙擊的第二下：同樣不掛拖曳 */
+      /** 雙擊的第二下：不掛拖曳（可雙擊區仍靠 detail 判斷，避免整卡無法拖移） */
       if (e.detail >= 2) {
         e.stopPropagation();
         return;
@@ -257,6 +257,7 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
         const ax = ev.clientX - startClient.x;
         const ay = ev.clientY - startClient.y;
         if (!dragMoved) {
+          lastClient = { x: ev.clientX, y: ev.clientY };
           if (ax * ax + ay * ay < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return;
           dragMoved = true;
           lockGlobalTextSelection();
@@ -294,8 +295,8 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
         const w = p.ui?.width ?? 280;
         const h = p.ui?.height ?? 220;
         const r = { x: x.get(), y: y.get(), width: w, height: h };
-        const zone = detectDistrictForRectCenterWorld(r, zonesRef.current);
-        const next = districtFromZoneHint(zone);
+        const sticky = lastLiveDistrictRef.current ?? p.district;
+        const next = districtTypeFromRectWithDragHysteresis(r, zonesRef.current, sticky, 40);
         if (next !== lastLiveDistrictRef.current) {
           lastLiveDistrictRef.current = next;
           setDistrict(p.id, next);
@@ -338,30 +339,38 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
         unbindDragRef.current = null;
       };
 
-      const onUp = () => {
+      const dropClientFromRelease = (releaseEv: Event): { x: number; y: number } => {
+        const pe = releaseEv as PointerEvent;
+        if (
+          typeof pe.clientX === "number" &&
+          typeof pe.clientY === "number" &&
+          Number.isFinite(pe.clientX) &&
+          Number.isFinite(pe.clientY)
+        ) {
+          return { x: pe.clientX, y: pe.clientY };
+        }
+        return { x: lastClient.x, y: lastClient.y };
+      };
+
+      const onUp = (releaseEv: Event) => {
+        const dropClient = dropClientFromRelease(releaseEv);
         cleanup();
         const moved = dragMoved;
         try {
           if (!moved) return;
 
           const st = useStore.getState();
-          const cSnap =
-            dragCanvasElRef.current ??
-            (document.querySelector("[data-epis-canvas-surface]") as HTMLElement | null);
-          const grab = dragGrabRef.current;
-          if (cSnap instanceof HTMLElement && grab) {
-            const vp = st.viewport;
-            const wpt = clientToWorldFromCanvasElement(lastClient.x, lastClient.y, cSnap, vp);
-            x.set(wpt.x - grab.x);
-            y.set(wpt.y - grab.y);
-          }
-
           const p = st.placements[placementId];
           if (!p) return;
           const w = p.ui?.width ?? 280;
           const h = p.ui?.height ?? 220;
 
-          if (isClientPointInsideMuseePortalInner(lastClient.x, lastClient.y)) {
+          const cSnap =
+            dragCanvasElRef.current ??
+            (document.querySelector("[data-epis-canvas-surface]") as HTMLElement | null);
+          const grab = dragGrabRef.current;
+
+          if (isClientPointInsideMuseePortalInner(dropClient.x, dropClient.y)) {
             sendToMuseeFromPortal(p.blockId);
             setDowntownHighlightedSlot(null);
             return;
@@ -369,12 +378,12 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
 
           if (
             st.aestheticsHubMode === "instagram" &&
-            isClientPointInsideDowntownSlotRoot(lastClient.x, lastClient.y, "ig")
+            isClientPointInsideDowntownSlotRoot(dropClient.x, dropClient.y, "ig")
           ) {
             const slotIndex = resolveIgSlotIndexForBlockDrop(
               motionRef.current,
-              lastClient.x,
-              lastClient.y,
+              dropClient.x,
+              dropClient.y,
               st.downtownIgSlotCount
             );
             if (slotIndex != null) {
@@ -386,12 +395,12 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
 
           if (
             st.aestheticsHubMode === "youtube" &&
-            isClientPointInsideDowntownSlotRoot(lastClient.x, lastClient.y, "yt")
+            isClientPointInsideDowntownSlotRoot(dropClient.x, dropClient.y, "yt")
           ) {
             const slotIndex = resolveSlotIndexForBlockDrop(
               motionRef.current,
-              lastClient.x,
-              lastClient.y,
+              dropClient.x,
+              dropClient.y,
               st.downtownIgSlotCount,
               "yt"
             );
@@ -403,29 +412,59 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
           }
 
           if (st.aestheticsHubMode === "blank") {
+            const { canvasPosition, downtownBlankScale } = st;
+            const px = dropClient.x;
+            const py = dropClient.y;
+            const hit = document.elementFromPoint(px, py);
+            const blankVpFromHit = hit?.closest("[data-epis-downtown-blank-viewport]");
+            if (blankVpFromHit instanceof HTMLElement) {
+              const wpt = clientToDowntownBlankWorld(
+                px,
+                py,
+                blankVpFromHit,
+                canvasPosition,
+                downtownBlankScale
+              );
+              assignPlacementToDowntownBlank(placementId, wpt.x - w / 2, wpt.y - h / 2);
+              setDowntownHighlightedSlot(null);
+              return;
+            }
             const blankVp = document.querySelector("[data-epis-downtown-blank-viewport]");
             if (blankVp instanceof HTMLElement) {
               const vr = blankVp.getBoundingClientRect();
-              const el = motionRef.current;
-              const br = el?.getBoundingClientRect();
-              if (br) {
-                const scx = br.left + br.width / 2;
-                const scy = br.top + br.height / 2;
-                if (scx >= vr.left && scx <= vr.right && scy >= vr.top && scy <= vr.bottom) {
-                  const { canvasPosition, downtownBlankScale } = st;
-                  const wpt = clientToDowntownBlankWorld(
-                    scx,
-                    scy,
-                    blankVp,
-                    canvasPosition,
-                    downtownBlankScale
-                  );
-                  assignPlacementToDowntownBlank(placementId, wpt.x - w / 2, wpt.y - h / 2);
-                  setDowntownHighlightedSlot(null);
-                  return;
-                }
+              const cursorIn =
+                px >= vr.left && px <= vr.right && py >= vr.top && py <= vr.bottom;
+              const br = motionRef.current?.getBoundingClientRect();
+              const scx = br ? br.left + br.width / 2 : px;
+              const scy = br ? br.top + br.height / 2 : py;
+              const centerIn =
+                br != null &&
+                scx >= vr.left &&
+                scx <= vr.right &&
+                scy >= vr.top &&
+                scy <= vr.bottom;
+              if (cursorIn || centerIn) {
+                const ax = cursorIn ? px : scx;
+                const ay = cursorIn ? py : scy;
+                const wpt = clientToDowntownBlankWorld(
+                  ax,
+                  ay,
+                  blankVp,
+                  canvasPosition,
+                  downtownBlankScale
+                );
+                assignPlacementToDowntownBlank(placementId, wpt.x - w / 2, wpt.y - h / 2);
+                setDowntownHighlightedSlot(null);
+                return;
               }
             }
+          }
+
+          if (cSnap instanceof HTMLElement && grab) {
+            const vp = st.viewport;
+            const wpt = clientToWorldFromCanvasElement(dropClient.x, dropClient.y, cSnap, vp);
+            x.set(wpt.x - grab.x);
+            y.set(wpt.y - grab.y);
           }
 
           setDowntownHighlightedSlot(null);
@@ -449,8 +488,8 @@ export const BlockRendererPlacement = memo(function BlockRendererPlacementInner(
 
       unbindDragRef.current = cleanup;
       window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onUp);
+      window.addEventListener("pointerup", onUp as EventListener);
+      window.addEventListener("pointercancel", onUp as EventListener);
     },
     [
       editingHere,

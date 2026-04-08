@@ -67,11 +67,21 @@ export function findDowntownSlotIndexAndGridAtClient(
   return null;
 }
 
-export function isClientPointOverCanvasSurface(clientX: number, clientY: number): boolean {
+export function isClientPointOverCanvasSurface(
+  clientX: number,
+  clientY: number,
+  marginPx = 0
+): boolean {
   const el = document.querySelector("[data-epis-canvas-surface]");
   if (!(el instanceof HTMLElement)) return false;
   const r = el.getBoundingClientRect();
-  return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+  const m = marginPx;
+  return (
+    clientX >= r.left - m &&
+    clientX <= r.right + m &&
+    clientY >= r.top - m &&
+    clientY <= r.bottom + m
+  );
 }
 
 export function portalAbsorbsClientPoint(
