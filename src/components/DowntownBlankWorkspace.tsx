@@ -1,4 +1,4 @@
-import { motion, useDragControls, useMotionValue, type PanInfo } from "framer-motion";
+import { motion, useMotionValue } from "framer-motion";
 import { Box, Plus, X } from "lucide-react";
 import {
   memo,
@@ -43,50 +43,6 @@ import { lockGlobalTextSelection, unlockGlobalTextSelection } from "@/dom/global
 import { useStore } from "@/store/useStore";
 
 ensureBlocksRegistered();
-
-/**
- * Framer {@link PanInfo}.point 多為 page 座標；DOM hit-test 須用 client（視窗）座標。
- * 部分 onDrag／onDragEnd 回呼沒有可靠的 clientX/clientY，須搭配 {@link readClientFromMotionDrag} 或 window pointermove。
- */
-function clientFromPanInfoLike(info: unknown): { x: number; y: number } | null {
-  if (!info || typeof info !== "object") return null;
-  const pt = (info as { point?: { x: number; y: number } }).point;
-  if (!pt || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) return null;
-  if (typeof window === "undefined") return { x: pt.x, y: pt.y };
-  return { x: pt.x - window.scrollX, y: pt.y - window.scrollY };
-}
-
-/** 從 Framer drag 事件／PanInfo 取出 client 座標（盡可能）；取不到則 null */
-function readClientFromMotionDrag(e: Event, info?: unknown): { x: number; y: number } | null {
-  const anyE = e as PointerEvent & MouseEvent & TouchEvent;
-  if (Number.isFinite(anyE.clientX) && Number.isFinite(anyE.clientY)) {
-    return { x: anyE.clientX, y: anyE.clientY };
-  }
-  if ("touches" in anyE && anyE.touches && anyE.touches.length > 0) {
-    const t = anyE.touches[0];
-    if (Number.isFinite(t.clientX) && Number.isFinite(t.clientY)) {
-      return { x: t.clientX, y: t.clientY };
-    }
-  }
-  if ("changedTouches" in anyE && anyE.changedTouches && anyE.changedTouches.length > 0) {
-    const t = anyE.changedTouches[0];
-    if (Number.isFinite(t.clientX) && Number.isFinite(t.clientY)) {
-      return { x: t.clientX, y: t.clientY };
-    }
-  }
-  return clientFromPanInfoLike(info);
-}
-
-function clientPointFromDragEnd(
-  e: PointerEvent | MouseEvent | TouchEvent,
-  info: PanInfo
-): { x: number; y: number } {
-  const fromDrag = readClientFromMotionDrag(e, info);
-  if (fromDrag) return fromDrag;
-  const fromInfo = clientFromPanInfoLike(info);
-  if (fromInfo) return fromInfo;
-  return { x: 0, y: 0 };
-}
 
 /** 約十字以內（與 store BLANK_LABEL_TEXT_MAX 對齊） */
 const BLANK_LABEL_TEXT_MAX = 14;
@@ -785,6 +741,8 @@ function BlockContent({
   return <Cmp model={model} />;
 }
 
+const BLANK_DRAG_THRESHOLD_PX = 4;
+
 const BlankDockedBlock = memo(function BlankDockedBlockInner({
   placementId,
 }: {
@@ -800,6 +758,8 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
   const editingHere = useStore((s) => s.editingPlacementId === placementId);
   const downtownBlankScale = useStore((s) => s.downtownBlankScale);
   const setPlanningDragVisual = useStore((s) => s.setPlanningDragVisual);
+  const showingPlanningGhost =
+    useStore((s) => s.planningDragVisual?.placementId === placementId && s.planningDragVisual?.kind === "blank");
 
   const pair = useStore(
     useShallow((s) => {
@@ -815,28 +775,9 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
   const y = useMotionValue(0);
   const motionRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const dragControls = useDragControls();
-  /** 勿訂閱 planningDragVisual：每幀 zustand 更新會重渲染本 motion，與 Framer drag 衝突導致分頁卡死 */
-  const [dimBlankDragSource, setDimBlankDragSource] = useState(false);
-  const dragOverlayRafRef = useRef<number | null>(null);
-  const pendingOverlayClientRef = useRef<{ x: number; y: number } | null>(null);
-  /** 瀏覽器原生 pointer 軌跡：Framer onDragEnd 傳入的 event 經常無法代表放手當下的螢幕座標 */
-  const lastPointerClientRef = useRef<{ x: number; y: number } | null>(null);
-  /** 放手瞬間以原生 pointerup 為準（scaled／內部座標下 info.point 可能卡在邊界） */
-  const lastNativePointerUpClientRef = useRef<{ x: number; y: number } | null>(null);
-  const globalPointerMoveCleanupRef = useRef<(() => void) | null>(null);
-
-  const endBlankGlobalPointerTracking = () => {
-    globalPointerMoveCleanupRef.current?.();
-    globalPointerMoveCleanupRef.current = null;
-  };
-
-  useEffect(() => {
-    return () => {
-      globalPointerMoveCleanupRef.current?.();
-      globalPointerMoveCleanupRef.current = null;
-    };
-  }, []);
+  const unbindDragRef = useRef<(() => void) | null>(null);
+  const dragGhostSizeRef = useRef({ w: 280, h: 220 });
+  const [isDragging, setIsDragging] = useState(false);
 
   useLayoutEffect(() => {
     if (!dragging.current) {
@@ -844,6 +785,157 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
       y.jump(0);
     }
   }, [pair?.placement.position.x, pair?.placement.position.y, x, y]);
+
+  const handleDragHandlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (!pair) return;
+      if (editingHere) return;
+      if (e.button !== 0) return;
+      if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
+      e.stopPropagation();
+      setSelectedPlacementId(pair.placement.id);
+
+      const placement = pair.placement;
+      const w = placement.ui?.width ?? 280;
+      const h = placement.ui?.height ?? 220;
+
+      let dragMoved = false;
+      const startClient = { x: e.clientX, y: e.clientY };
+      let lastClient = { x: e.clientX, y: e.clientY };
+
+      const onMove = (ev: PointerEvent) => {
+        const ax = ev.clientX - startClient.x;
+        const ay = ev.clientY - startClient.y;
+        if (!dragMoved) {
+          if (ax * ax + ay * ay < BLANK_DRAG_THRESHOLD_PX * BLANK_DRAG_THRESHOLD_PX) return;
+          dragMoved = true;
+          lockGlobalTextSelection();
+          dragging.current = true;
+          setIsDragging(true);
+          const br0 = motionRef.current?.getBoundingClientRect();
+          if (br0) dragGhostSizeRef.current = { w: br0.width, h: br0.height };
+        }
+        lastClient = { x: ev.clientX, y: ev.clientY };
+
+        /** 在空白畫布內：以 scale-aware delta 移動 motion value */
+        const sc = downtownBlankScale > 1e-6 ? downtownBlankScale : 1;
+        x.jump(ax / sc);
+        y.jump(ay / sc);
+
+        /** 游標是否在主畫布上：啟動浮層 */
+        const overMain = isClientPointOverCanvasSurface(ev.clientX, ev.clientY);
+        if (overMain) {
+          setPlanningDragVisual({
+            placementId: placement.id,
+            clientX: ev.clientX,
+            clientY: ev.clientY,
+            width: dragGhostSizeRef.current.w,
+            height: dragGhostSizeRef.current.h,
+            kind: "blank",
+          });
+        } else {
+          setPlanningDragVisual(null);
+        }
+
+        const idx = findDowntownSlotIndexAtClient(ev.clientX, ev.clientY);
+        setDowntownHighlightedSlot(idx);
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        unbindDragRef.current = null;
+      };
+
+      const onUp = () => {
+        cleanup();
+        setPlanningDragVisual(null);
+        unlockGlobalTextSelection();
+
+        try {
+          if (!dragMoved) return;
+
+          const cx = lastClient.x;
+          const cy = lastClient.y;
+
+          /** 優先序：Musée → 主畫布 → 規劃格 slot → 空白畫布 → 回彈 */
+          if (isClientPointInsideMuseePortalInner(cx, cy)) {
+            sendToMuseeFromPortal(placement.blockId);
+            setDowntownHighlightedSlot(null);
+            return;
+          }
+
+          const canvasEl = document.querySelector("[data-epis-canvas-surface]");
+          if (canvasEl instanceof HTMLElement && isClientPointOverCanvasSurface(cx, cy)) {
+            const vp = useStore.getState().viewport;
+            const wpt = clientToWorldFromCanvasElement(cx, cy, canvasEl, vp);
+            releasePlacementFromDowntown(placement.id, wpt.x, wpt.y);
+            setDowntownHighlightedSlot(null);
+            return;
+          }
+
+          const slotHit = findDowntownSlotIndexAndGridAtClient(cx, cy);
+          if (slotHit != null) {
+            const canvasEl2 = document.querySelector("[data-epis-canvas-surface]");
+            let releaseCenter: { x: number; y: number } | undefined;
+            if (canvasEl2 instanceof HTMLElement) {
+              const vp = useStore.getState().viewport;
+              const wpt = clientToWorldFromCanvasElement(cx, cy, canvasEl2, vp);
+              releaseCenter = { x: wpt.x, y: wpt.y };
+            }
+            assignPlacementToDowntownSlot(placement.id, slotHit.index, {
+              occupantReleaseWorldCenter: releaseCenter,
+              grid: slotHit.grid,
+            });
+            setDowntownHighlightedSlot(null);
+            return;
+          }
+
+          const blankVp = document.querySelector("[data-epis-downtown-blank-viewport]");
+          if (blankVp instanceof HTMLElement) {
+            const vr = blankVp.getBoundingClientRect();
+            if (cx >= vr.left && cx <= vr.right && cy >= vr.top && cy <= vr.bottom) {
+              const { canvasPosition: pos, downtownBlankScale: sc } = useStore.getState();
+              const br = motionRef.current?.getBoundingClientRect();
+              const bx = br ? br.left + br.width / 2 : cx;
+              const by = br ? br.top + br.height / 2 : cy;
+              const pt = clientToDowntownBlankWorld(bx, by, blankVp, pos, sc);
+              assignPlacementToDowntownBlank(placement.id, pt.x - w / 2, pt.y - h / 2);
+              setDowntownHighlightedSlot(null);
+              return;
+            }
+          }
+
+          setDowntownHighlightedSlot(null);
+        } finally {
+          dragging.current = false;
+          setIsDragging(false);
+          x.jump(0);
+          y.jump(0);
+        }
+      };
+
+      unbindDragRef.current = cleanup;
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    },
+    [
+      pair,
+      editingHere,
+      downtownBlankScale,
+      setSelectedPlacementId,
+      setPlanningDragVisual,
+      sendToMuseeFromPortal,
+      releasePlacementFromDowntown,
+      assignPlacementToDowntownSlot,
+      assignPlacementToDowntownBlank,
+      setDowntownHighlightedSlot,
+      x,
+      y,
+    ]
+  );
 
   if (!pair) return null;
 
@@ -854,175 +946,6 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
 
   const w = placement.ui?.width ?? 280;
   const h = placement.ui?.height ?? 220;
-
-  const handleDragEnd = (e: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) => {
-    /** 先讀原生放手座標再拆 listener，避免順序導致漏讀 */
-    const nativeUp = lastNativePointerUpClientRef.current;
-    lastNativePointerUpClientRef.current = null;
-    const fromWinMove = lastPointerClientRef.current;
-    lastPointerClientRef.current = null;
-    endBlankGlobalPointerTracking();
-
-    if (dragOverlayRafRef.current != null) {
-      cancelAnimationFrame(dragOverlayRafRef.current);
-      dragOverlayRafRef.current = null;
-    }
-    const pend = pendingOverlayClientRef.current;
-    if (pend) {
-      useStore.getState().setPlanningDragVisual({
-        placementId: placement.id,
-        clientX: pend.x,
-        clientY: pend.y,
-        width: w,
-        height: h,
-        kind: "blank",
-      });
-      pendingOverlayClientRef.current = null;
-    }
-    const ghostSnap = useStore.getState().planningDragVisual;
-    const fromEvt = readClientFromMotionDrag(e, info);
-    let cx: number;
-    let cy: number;
-    if (
-      nativeUp != null &&
-      Number.isFinite(nativeUp.x) &&
-      Number.isFinite(nativeUp.y)
-    ) {
-      cx = nativeUp.x;
-      cy = nativeUp.y;
-    } else if (
-      fromWinMove != null &&
-      Number.isFinite(fromWinMove.x) &&
-      Number.isFinite(fromWinMove.y)
-    ) {
-      cx = fromWinMove.x;
-      cy = fromWinMove.y;
-    } else if (
-      ghostSnap != null &&
-      ghostSnap.placementId === placement.id &&
-      Number.isFinite(ghostSnap.clientX) &&
-      Number.isFinite(ghostSnap.clientY)
-    ) {
-      cx = ghostSnap.clientX;
-      cy = ghostSnap.clientY;
-    } else if (fromEvt) {
-      cx = fromEvt.x;
-      cy = fromEvt.y;
-    } else {
-      const fb = clientPointFromDragEnd(e, info);
-      cx = fb.x;
-      cy = fb.y;
-    }
-
-    const usedNativePointerRelease =
-      nativeUp != null &&
-      Number.isFinite(nativeUp.x) &&
-      Number.isFinite(nativeUp.y);
-
-    /** 釋放瞬間略放寬命中；落點與區域偵測一律以游標（與浮層同步的最後 pointer 位置）為準，不以卡片幾何中心代替 */
-    const canvasEdgeSlackPx = 3;
-
-    const resetDragOffset = () => {
-      x.jump(0);
-      y.jump(0);
-    };
-
-    /** 主畫布世界座標：用游標；若浮層與游標皆在 surface 上則採浮層點（仍等同指標軌跡，可補 drag end 事件座標落後） */
-    const pickCanvasClientForWorld = (): { x: number; y: number } => {
-      /** 原生 pointerup 已對準螢幕座標時，勿再用可能卡邊的 Framer 浮層點覆寫 */
-      if (usedNativePointerRelease) return { x: cx, y: cy };
-      const kindOk =
-        ghostSnap != null &&
-        ghostSnap.placementId === placement.id &&
-        ghostSnap.kind === "blank";
-      const dropOnCanvas = isClientPointOverCanvasSurface(cx, cy, canvasEdgeSlackPx);
-      if (!kindOk || !ghostSnap) return { x: cx, y: cy };
-      const ghostOnCanvas = isClientPointOverCanvasSurface(
-        ghostSnap.clientX,
-        ghostSnap.clientY,
-        canvasEdgeSlackPx
-      );
-      if (ghostOnCanvas && dropOnCanvas) {
-        return { x: ghostSnap.clientX, y: ghostSnap.clientY };
-      }
-      return { x: cx, y: cy };
-    };
-
-    try {
-      unlockGlobalTextSelection();
-      dragging.current = false;
-
-    if (isClientPointInsideMuseePortalInner(cx, cy)) {
-      sendToMuseeFromPortal(placement.blockId);
-      setDowntownHighlightedSlot(null);
-      resetDragOffset();
-      return;
-    }
-
-    const canvasEl = document.querySelector("[data-epis-canvas-surface]");
-    /** 須游標在 main surface 上才釋放到主畫布，避免「游標仍在右欄卻用別的參考點誤放」 */
-    const cursorOverMainCanvas = isClientPointOverCanvasSurface(
-      cx,
-      cy,
-      canvasEdgeSlackPx
-    );
-    const cc = pickCanvasClientForWorld();
-    if (canvasEl instanceof HTMLElement && cursorOverMainCanvas) {
-      const stDrop = useStore.getState();
-      const proj = stDrop.canvasClientToWorld;
-      const wpt = proj
-        ? proj(cc.x, cc.y)
-        : clientToWorldFromCanvasElement(cc.x, cc.y, canvasEl, stDrop.viewport);
-      releasePlacementFromDowntown(placement.id, wpt.x, wpt.y);
-      setDowntownHighlightedSlot(null);
-      resetDragOffset();
-      return;
-    }
-
-    const slotHit = findDowntownSlotIndexAndGridAtClient(cx, cy);
-    if (slotHit != null) {
-      const canvasEl2 = document.querySelector("[data-epis-canvas-surface]");
-      let releaseCenter: { x: number; y: number } | undefined;
-      if (canvasEl2 instanceof HTMLElement) {
-        const st2 = useStore.getState();
-        const p2 = st2.canvasClientToWorld;
-        const wpt = p2
-          ? p2(cx, cy)
-          : clientToWorldFromCanvasElement(cx, cy, canvasEl2, st2.viewport);
-        releaseCenter = { x: wpt.x, y: wpt.y };
-      }
-      assignPlacementToDowntownSlot(placement.id, slotHit.index, {
-        occupantReleaseWorldCenter: releaseCenter,
-        grid: slotHit.grid,
-      });
-      setDowntownHighlightedSlot(null);
-      resetDragOffset();
-      return;
-    }
-
-    const blankVp = document.querySelector("[data-epis-downtown-blank-viewport]");
-    if (blankVp instanceof HTMLElement) {
-      const vr = blankVp.getBoundingClientRect();
-      const cursorInBlank =
-        cx >= vr.left && cx <= vr.right && cy >= vr.top && cy <= vr.bottom;
-      if (cursorInBlank) {
-        const { canvasPosition: pos, downtownBlankScale: sc } = useStore.getState();
-        const pt = clientToDowntownBlankWorld(cx, cy, blankVp, pos, sc);
-        assignPlacementToDowntownBlank(placement.id, pt.x - w / 2, pt.y - h / 2);
-        setDowntownHighlightedSlot(null);
-        resetDragOffset();
-        return;
-      }
-    }
-
-    setDowntownHighlightedSlot(null);
-    resetDragOffset();
-    } finally {
-      setPlanningDragVisual(null);
-      useStore.getState().setDraggingCanvasPlacementId(null);
-      setDimBlankDragSource(false);
-    }
-  };
 
   const dragLiftShadow = "0 20px 40px rgba(0, 0, 0, 0.1)";
 
@@ -1039,113 +962,26 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
         x,
         y,
         willChange: "transform",
-        opacity: dimBlankDragSource ? 0.14 : 1,
-      }}
-      drag={!editingHere}
-      dragControls={dragControls}
-      dragListener={false}
-      /** 不限制在迷你畫布盒內，否則拖到邊界即被 overflow 裁掉；跨欄預覽改由 PlanningDragOverlay */
-      dragConstraints={false}
-      dragMomentum={false}
-      dragElastic={0}
-      dragTransition={{ bounceStiffness: 12000, bounceDamping: 80 }}
-      whileDrag={{
-        scale: 1.02,
-        boxShadow: dragLiftShadow,
-        zIndex: 40,
-        cursor: "grabbing",
+        scale: isDragging ? 1.02 : 1,
+        opacity: isDragging && showingPlanningGhost ? 0.14 : isDragging ? 0.96 : 1,
+        boxShadow: isDragging ? dragLiftShadow : undefined,
+        zIndex: isDragging ? 40 : undefined,
+        cursor: isDragging ? "grabbing" : undefined,
+        transition: isDragging ? "opacity 0.12s ease-out" : "opacity 0.2s ease-out",
       }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.stopPropagation();
         setSelectedPlacementId(placement.id);
+        handleDragHandlePointerDown(e);
       }}
-      onDragStart={(dragEv) => {
-        dragging.current = true;
-        setDimBlankDragSource(true);
-        lockGlobalTextSelection();
-        useStore.getState().setDraggingCanvasPlacementId(placement.id);
-        endBlankGlobalPointerTracking();
-        const onGlobalPointerMove = (ev: Event) => {
-          const p = ev as PointerEvent;
-          if (Number.isFinite(p.clientX) && Number.isFinite(p.clientY)) {
-            lastPointerClientRef.current = { x: p.clientX, y: p.clientY };
-          }
-        };
-        const onGlobalPointerUpOrCancel = (ev: Event) => {
-          const p = ev as PointerEvent;
-          if (Number.isFinite(p.clientX) && Number.isFinite(p.clientY)) {
-            lastNativePointerUpClientRef.current = { x: p.clientX, y: p.clientY };
-          }
-        };
-        window.addEventListener("pointermove", onGlobalPointerMove, { capture: true });
-        window.addEventListener("pointerup", onGlobalPointerUpOrCancel, { capture: true });
-        window.addEventListener("pointercancel", onGlobalPointerUpOrCancel, { capture: true });
-        globalPointerMoveCleanupRef.current = () => {
-          window.removeEventListener("pointermove", onGlobalPointerMove, { capture: true });
-          window.removeEventListener("pointerup", onGlobalPointerUpOrCancel, { capture: true });
-          window.removeEventListener("pointercancel", onGlobalPointerUpOrCancel, { capture: true });
-        };
-        lastNativePointerUpClientRef.current = null;
-        const br0 = motionRef.current?.getBoundingClientRect();
-        const p0 = readClientFromMotionDrag(dragEv);
-        const cx = p0?.x ?? (br0 ? br0.left + br0.width / 2 : 0);
-        const cy = p0?.y ?? (br0 ? br0.top + br0.height / 2 : 0);
-        lastPointerClientRef.current = { x: cx, y: cy };
-        setPlanningDragVisual({
-          placementId: placement.id,
-          clientX: cx,
-          clientY: cy,
-          width: w,
-          height: h,
-          kind: "blank",
-        });
-      }}
-      onDrag={(dragEv, panInfo: PanInfo) => {
-        const p = readClientFromMotionDrag(dragEv, panInfo);
-        if (p) {
-          pendingOverlayClientRef.current = p;
-          lastPointerClientRef.current = p;
-          if (dragOverlayRafRef.current == null) {
-            dragOverlayRafRef.current = requestAnimationFrame(() => {
-              dragOverlayRafRef.current = null;
-              const pendInner = pendingOverlayClientRef.current;
-              if (!pendInner) return;
-              useStore.getState().setPlanningDragVisual({
-                placementId: placement.id,
-                clientX: pendInner.x,
-                clientY: pendInner.y,
-                width: w,
-                height: h,
-                kind: "blank",
-              });
-            });
-          }
-        }
-        const box = motionRef.current?.getBoundingClientRect();
-        if (box) {
-          const idx = findDowntownSlotIndexAtClient(
-            box.left + box.width / 2,
-            box.top + box.height / 2
-          );
-          setDowntownHighlightedSlot(idx);
-        }
-      }}
-      onDragEnd={handleDragEnd}
       onPointerCancel={() => {
-        endBlankGlobalPointerTracking();
-        lastNativePointerUpClientRef.current = null;
-        lastPointerClientRef.current = null;
-        if (dragOverlayRafRef.current != null) {
-          cancelAnimationFrame(dragOverlayRafRef.current);
-          dragOverlayRafRef.current = null;
-        }
-        pendingOverlayClientRef.current = null;
+        unbindDragRef.current?.();
+        unbindDragRef.current = null;
         unlockGlobalTextSelection();
         setPlanningDragVisual(null);
-        useStore.getState().setDraggingCanvasPlacementId(null);
         dragging.current = false;
-        setDimBlankDragSource(false);
+        setIsDragging(false);
         setDowntownHighlightedSlot(null);
         x.jump(0);
         y.jump(0);
@@ -1154,14 +990,7 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
       <div
         className="absolute left-0 top-0 z-[18] flex h-10 max-w-[calc(100%-4.75rem)] cursor-grab items-center justify-center rounded-br-md rounded-tl-xl border-b border-r border-[var(--color-stroke)]/18 bg-[#ebe8e2]/95 active:cursor-grabbing"
         title="由此區域拖移積木"
-        onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          if ((e.target as HTMLElement).closest("button, a, input, textarea, select")) return;
-          e.stopPropagation();
-          setSelectedPlacementId(placement.id);
-          lastPointerClientRef.current = { x: e.clientX, y: e.clientY };
-          dragControls.start(e);
-        }}
+        onPointerDown={handleDragHandlePointerDown}
       >
         <span className="pointer-events-none h-1 w-10 rounded-full bg-[rgba(58,63,71,0.16)]" />
       </div>
@@ -1169,7 +998,7 @@ const BlankDockedBlock = memo(function BlankDockedBlockInner({
         className="box-border h-full min-h-0 w-full overflow-hidden rounded-xl border border-[var(--color-stroke)]/22 bg-[#faf8f4] pt-10 text-[10px] leading-snug shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
         onPointerDown={(e) => {
           const t = e.target as HTMLElement;
-          if (t.closest("button, a, input, textarea, select, [data-epis-no-drag], [data-epis-block-resize]")) {
+          if (t.closest("button, a, input, textarea, select, [data-epis-block-resize]")) {
             e.stopPropagation();
           }
         }}
@@ -1342,7 +1171,7 @@ export const DowntownBlankWorkspace = memo(function DowntownBlankWorkspaceInner(
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute right-2 top-2 z-[100] flex flex-row items-center gap-2"
+          className="pointer-events-none absolute right-2 top-2 z-20 flex flex-row items-center gap-2"
           aria-label="空白畫布快捷操作"
         >
           <div

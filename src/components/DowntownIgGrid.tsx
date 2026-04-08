@@ -165,8 +165,10 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
   const [dragging, setDragging] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const setPlanningDragVisual = useStore((s) => s.setPlanningDragVisual);
-  /** 勿訂閱 planningDragVisual：每幀更新會重渲染本 motion，與慣性拖曳衝突造成卡死 */
-  const [planningGhostForDimming, setPlanningGhostForDimming] = useState(false);
+  const planningDragVisual = useStore((s) => s.planningDragVisual);
+  const showingPlanningGhost =
+    planningDragVisual?.placementId === placementId &&
+    (planningDragVisual.kind === "slot-ig" || planningDragVisual.kind === "slot-yt");
 
   useLayoutEffect(() => {
     if (pair?.placement) placementRef.current = pair.placement;
@@ -185,11 +187,16 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
       if (editingHere) return;
       if (e.button !== 0) return;
       const t = e.target as HTMLElement;
+      if (t.closest("[data-epis-dblclick-edit]")) {
+        e.stopPropagation();
+        setSelectedPlacementId(pair.placement.id);
+        return;
+      }
       if (e.detail >= 2) {
         e.stopPropagation();
         return;
       }
-      if (t.closest("[data-epis-no-drag], [data-epis-block-resize], button, a, input, textarea, select"))
+      if (t.closest("[data-epis-block-resize], button, a, input, textarea, select"))
         return;
       e.stopPropagation();
       unbindDragRef.current?.();
@@ -206,14 +213,8 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
         const ax = ev.clientX - startClient.x;
         const ay = ev.clientY - startClient.y;
         if (!dragMoved) {
-          lastClient = { x: ev.clientX, y: ev.clientY };
           if (ax * ax + ay * ay < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) return;
           dragMoved = true;
-          try {
-            motionRef.current?.setPointerCapture(ev.pointerId);
-          } catch {
-            /* ignore: drag still works via window listeners */
-          }
           lockGlobalTextSelection();
           setDragging(true);
           lastSlotHighlightRef.current = null;
@@ -241,7 +242,6 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
           overBlank = lx >= vr.left && lx <= vr.right && ly >= vr.top && ly <= vr.bottom;
         }
         if ((overMain || overBlank) && st.blocks[placement.blockId]) {
-          setPlanningGhostForDimming(true);
           setPlanningDragVisual({
             placementId: placement.id,
             clientX: lx,
@@ -251,7 +251,6 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
             kind: slotKind === "yt" ? "slot-yt" : "slot-ig",
           });
         } else {
-          setPlanningGhostForDimming(false);
           setPlanningDragVisual(null);
         }
 
@@ -275,32 +274,9 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
         unbindDragRef.current = null;
       };
 
-      const dropClientFromRelease = (ev: Event): { x: number; y: number } => {
-        const pe = ev as PointerEvent;
-        if (
-          typeof pe.clientX === "number" &&
-          typeof pe.clientY === "number" &&
-          Number.isFinite(pe.clientX) &&
-          Number.isFinite(pe.clientY)
-        ) {
-          return { x: pe.clientX, y: pe.clientY };
-        }
-        return { x: lastClient.x, y: lastClient.y };
-      };
-
-      const onUp = (ev: Event) => {
-        const pe = ev as PointerEvent;
-        const dropClient = dropClientFromRelease(ev);
-        /** 先快照浮層座標（與 PlanningDragOverlay 同步），避免主畫布 z 較高時 pointerup 與最後一次 move 不一致 */
-        const ghostSnap = useStore.getState().planningDragVisual;
-        try {
-          motionRef.current?.releasePointerCapture(pe.pointerId);
-        } catch {
-          /* noop */
-        }
+      const onUp = () => {
         cleanup();
         setPlanningDragVisual(null);
-        setPlanningGhostForDimming(false);
         try {
           if (!dragMoved) return;
           setDragging(false);
@@ -311,22 +287,7 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
           if (!p) return;
           const gidx = p.gridIndex ?? 0;
 
-          const clientForMainCanvasWorld = (): { x: number; y: number } => {
-            const kindOk =
-              ghostSnap != null &&
-              ghostSnap.placementId === p.id &&
-              (ghostSnap.kind === "slot-ig" || ghostSnap.kind === "slot-yt");
-            const dropOnCanvas = isClientPointOverCanvasSurface(dropClient.x, dropClient.y);
-            if (!kindOk || !ghostSnap) return dropClient;
-            const ghostOnCanvas = isClientPointOverCanvasSurface(ghostSnap.clientX, ghostSnap.clientY);
-            /** 浮層與游標都在主畫布上時，採用浮層追蹤點（與預覽一致） */
-            if (ghostOnCanvas && dropOnCanvas) {
-              return { x: ghostSnap.clientX, y: ghostSnap.clientY };
-            }
-            return dropClient;
-          };
-
-          if (isClientPointInsideMuseePortalInner(dropClient.x, dropClient.y)) {
+          if (isClientPointInsideMuseePortalInner(lastClient.x, lastClient.y)) {
             sendToMuseeFromPortal(p.blockId);
             setDowntownHighlightedSlot(null);
             x.set(0);
@@ -361,16 +322,20 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
             }
           }
 
-          const inRoot = isClientPointInsideDowntownSlotRoot(dropClient.x, dropClient.y, slotKind);
+          const inRoot = isClientPointInsideDowntownSlotRoot(lastClient.x, lastClient.y, slotKind);
           if (!inRoot) {
-            const surface = document.querySelector("[data-epis-canvas-surface]");
-            if (surface instanceof HTMLElement) {
-              const wcc = clientForMainCanvasWorld();
-              const proj = st.canvasClientToWorld;
-              const wpt = proj
-                ? proj(wcc.x, wcc.y)
-                : clientToWorldFromCanvasElement(wcc.x, wcc.y, surface, st.viewport);
-              releasePlacementFromDowntown(p.id, wpt.x, wpt.y);
+            /** 只在游標確實在主畫布上方時才釋放到主畫布；否則回彈至原 slot */
+            if (isClientPointOverCanvasSurface(lastClient.x, lastClient.y)) {
+              const surface = document.querySelector("[data-epis-canvas-surface]");
+              if (surface instanceof HTMLElement) {
+                const wpt = clientToWorldFromCanvasElement(
+                  lastClient.x,
+                  lastClient.y,
+                  surface,
+                  st.viewport
+                );
+                releasePlacementFromDowntown(p.id, wpt.x, wpt.y);
+              }
             }
             setDowntownHighlightedSlot(null);
             x.set(0);
@@ -380,8 +345,8 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
 
           const slot = resolveSlotIndexForBlockDrop(
             motionRef.current,
-            dropClient.x,
-            dropClient.y,
+            lastClient.x,
+            lastClient.y,
             st.downtownIgSlotCount,
             slotKind
           );
@@ -390,11 +355,12 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
               occupantReleaseWorldCenter: (() => {
                 const surface = document.querySelector("[data-epis-canvas-surface]");
                 if (!(surface instanceof HTMLElement)) return { x: 0, y: 0 };
-                const wcc = clientForMainCanvasWorld();
-                const proj = st.canvasClientToWorld;
-                return proj
-                  ? proj(wcc.x, wcc.y)
-                  : clientToWorldFromCanvasElement(wcc.x, wcc.y, surface, st.viewport);
+                return clientToWorldFromCanvasElement(
+                  lastClient.x,
+                  lastClient.y,
+                  surface,
+                  st.viewport
+                );
               })(),
               grid: gridOpt,
             });
@@ -409,8 +375,8 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
 
       unbindDragRef.current = cleanup;
       window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp as EventListener);
-      window.addEventListener("pointercancel", onUp as EventListener);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
     },
     [
       pair,
@@ -452,24 +418,18 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
           y,
           scale: dragging ? 1.02 : 1,
           willChange: "transform",
-          opacity: dragging && planningGhostForDimming ? 0.14 : dragging ? 0.98 : 1,
+          opacity: dragging && showingPlanningGhost ? 0.14 : dragging ? 0.98 : 1,
           boxShadow: dragging ? dragLiftShadow : undefined,
           zIndex: dragging ? 40 : undefined,
           cursor: dragging ? "grabbing" : undefined,
           transition: dragging ? "opacity 0.12s ease-out" : "opacity 0.2s ease-out",
         }}
         onPointerDown={handlePointerDown}
-        onPointerCancel={(e) => {
-          try {
-            motionRef.current?.releasePointerCapture(e.pointerId);
-          } catch {
-            /* noop */
-          }
+        onPointerCancel={() => {
           unbindDragRef.current?.();
           unbindDragRef.current = null;
           unlockGlobalTextSelection();
           setPlanningDragVisual(null);
-          setPlanningGhostForDimming(false);
           setDragging(false);
           setDowntownHighlightedSlot(null);
           x.set(0);
@@ -480,7 +440,7 @@ const TownDockedBlock = memo(function TownDockedBlockInner({
           className="h-full min-h-0 w-full overflow-hidden rounded-sm text-[10px] leading-snug"
           onPointerDown={(e) => {
             const t = e.target as HTMLElement;
-            if (t.closest("button, a, input, textarea, select, [data-epis-no-drag], [data-epis-block-resize]")) {
+            if (t.closest("button, a, input, textarea, select, [data-epis-block-resize]")) {
               e.stopPropagation();
             }
           }}

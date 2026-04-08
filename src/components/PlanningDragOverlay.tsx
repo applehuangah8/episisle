@@ -98,6 +98,21 @@ export function PlanningDragOverlay() {
       style={{ cursor: "grabbing" }}
       aria-hidden
     >
+      {/* Drop-point indicator dot */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          left: v.clientX,
+          top: v.clientY,
+          width: 8,
+          height: 8,
+          marginLeft: -4,
+          marginTop: -4,
+          background: borderColor,
+          boxShadow: `0 0 0 3px rgba(255,255,255,0.7), 0 0 12px ${borderColor}`,
+        }}
+      />
+      {/* Block thumbnail */}
       <motion.div
         className="absolute"
         style={{
@@ -107,19 +122,20 @@ export function PlanningDragOverlay() {
           height: v.height,
           marginLeft: -v.width / 2,
           marginTop: -v.height / 2,
-          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.1)",
+          boxShadow:
+            "0 12px 32px -8px rgba(0,0,0,0.18), 0 4px 12px -4px rgba(0,0,0,0.08)",
         }}
-        initial={{ scale: 1, opacity: 0.88 }}
-        animate={{ scale: 1.05, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 520, damping: 28, mass: 0.65 }}
+        initial={{ scale: 0.5, opacity: 0 }}
+        animate={{ scale: 0.82, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 26, mass: 0.5 }}
       >
         <div
           className="flex h-full w-full flex-col overflow-hidden rounded-xl"
           style={{
-            background: "rgba(255, 255, 255, 0.4)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            border: `0.5px solid ${borderColor}`,
+            background: "rgba(255, 255, 255, 0.22)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: `1.5px solid ${borderColor}`,
             boxSizing: "border-box",
           }}
         >
