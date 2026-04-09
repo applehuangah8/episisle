@@ -4,161 +4,138 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 
 /**
- * Scholar-Traveler — redesigned character.
+ * Scholar-Traveler — chibi redesign.
  *
- * Design language from Image 2 color palette:
- *   coat: warm ivory #ede5d6 (like the white robe)
- *   hat:  wheat straw #d4a85c
- *   band: terracotta  #b85840
- *   pack: deep navy   #2e404e
- *   scarf: dusty rose #c08890
- *   skin:  warm peach #f2d4b4
- *   eyes:  dark navy  #1e2636
- *   cheeks: warm rosy #e89080
+ * Proportions (local space, scale = 2.1):
+ *   shoe bottom  y = -0.28  →  world y = 0.15 + (-0.28 × 2.1) = -0.44  (sand surface ✓)
+ *   legs         y = -0.20 → -0.06
+ *   body         y = -0.04 →  0.34   (h=0.38)
+ *   neck         y =  0.38 →  0.46
+ *   head         y =  0.56          (r=0.185)
+ *   hat top      y ≈  0.78
  *
- * group at y = 0, scale = 2.25 → body bottom sits exactly at sand surface y = -0.45
+ * Color palette from Image 2:
+ *   coat/shirt: ivory #ede5d6   hat: wheat #d4a85c   band: terracotta #b85840
+ *   pack: navy #2e404e          scarf: dusty rose #c08890
+ *   skin: warm peach #f2d4b4   shorts: linen #d8cfc0  shoes: warm brown #7a4828
  */
 export function MiniTraveler() {
-  const rootRef = useRef<THREE.Group>(null);
-  const headRef = useRef<THREE.Mesh>(null);
-  const eyeLRef = useRef<THREE.Mesh>(null);
-  const eyeRRef = useRef<THREE.Mesh>(null);
-  const blinkRef = useRef({ t: 0, next: 2.0 + Math.random() * 2.8, closing: false });
+  const rootRef  = useRef<THREE.Group>(null);
+  const headRef  = useRef<THREE.Group>(null);
+  const armLRef  = useRef<THREE.Group>(null);
+  const eyeLRef  = useRef<THREE.Mesh>(null);
+  const eyeRRef  = useRef<THREE.Mesh>(null);
+  const blinkRef = useRef({ t: 0, next: 2.5 + Math.random() * 3, closing: false });
 
   // ─── materials ────────────────────────────────────────────────────────────
 
-  /** Porcelain skin — clearcoat gives a fine figurine feel */
-  const skin = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#f2d4b4"),
-        roughness: 0.28,
-        clearcoat: 0.85,
-        clearcoatRoughness: 0.32,
-      }),
-    []
-  );
+  const skin = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#f2d4b4"),
+    roughness: 0.30,
+    clearcoat: 0.80,
+    clearcoatRoughness: 0.35,
+  }), []);
 
-  /** Ivory coat — fabric sheen like a linen travel jacket */
-  const coat = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#ede5d6"),
-        roughness: 0.88,
-        sheen: 0.65,
-        sheenColor: new THREE.Color("#f8f3ec"),
-        sheenRoughness: 0.78,
-      }),
-    []
-  );
+  const coat = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#ede5d6"),
+    roughness: 0.86,
+    sheen: 0.55,
+    sheenColor: new THREE.Color("#f8f3ec"),
+    sheenRoughness: 0.80,
+  }), []);
 
-  /** Wheat straw hat */
-  const hatStraw = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#d4a85c"),
-        roughness: 0.82,
-        clearcoat: 0.12,
-        clearcoatRoughness: 0.9,
-      }),
-    []
-  );
+  const shorts = useMemo(() => new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#d8cfc0"),
+    roughness: 0.90,
+  }), []);
 
-  /** Terracotta hat band — Image 2 brick-red accent */
-  const hatBand = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#b85840"),
-        roughness: 0.78,
-      }),
-    []
-  );
+  const shoes = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#7a4828"),
+    roughness: 0.78,
+    clearcoat: 0.20,
+    clearcoatRoughness: 0.65,
+  }), []);
 
-  /** Deep navy backpack — Image 2 navy blue */
-  const pack = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#2e404e"),
-        roughness: 0.82,
-        clearcoat: 0.18,
-        clearcoatRoughness: 0.75,
-        sheen: 0.3,
-        sheenColor: new THREE.Color("#d8e8f0"),
-        sheenRoughness: 0.9,
-      }),
-    []
-  );
+  const hatStraw = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#d4a85c"),
+    roughness: 0.80,
+    clearcoat: 0.10,
+    clearcoatRoughness: 0.92,
+  }), []);
 
-  /** Dusty rose scarf — Image 2 muted rose */
-  const scarf = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#c08890"),
-        roughness: 0.92,
-        sheen: 0.42,
-        sheenColor: new THREE.Color("#f0e0e4"),
-        sheenRoughness: 0.88,
-      }),
-    []
-  );
+  const hatBand = useMemo(() => new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#b85840"),
+    roughness: 0.76,
+  }), []);
 
-  const ink = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: new THREE.Color("#1e2636"), roughness: 0.95 }),
-    []
-  );
+  const pack = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#2e404e"),
+    roughness: 0.80,
+    clearcoat: 0.15,
+    clearcoatRoughness: 0.78,
+  }), []);
 
-  const inkHighlight = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: new THREE.Color("#ffffff"), roughness: 0.5 }),
-    []
-  );
+  const scarf = useMemo(() => new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color("#c08890"),
+    roughness: 0.90,
+    sheen: 0.45,
+    sheenColor: new THREE.Color("#f0e0e4"),
+    sheenRoughness: 0.88,
+  }), []);
 
-  const blush = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#e89080"),
-        roughness: 0.95,
-        transparent: true,
-        opacity: 0.58,
-      }),
-    []
-  );
+  const ink = useMemo(() => new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#1e2636"), roughness: 0.95,
+  }), []);
 
-  const brow = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: new THREE.Color("#7a4e30"), roughness: 0.9 }),
-    []
-  );
+  const inkHL = useMemo(() => new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#ffffff"), roughness: 0.5,
+  }), []);
+
+  const blush = useMemo(() => new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#e89080"), roughness: 0.95,
+    transparent: true, opacity: 0.55,
+  }), []);
+
+  const brow = useMemo(() => new THREE.MeshStandardMaterial({
+    color: new THREE.Color("#7a4e30"), roughness: 0.90,
+  }), []);
 
   // ─── animation ────────────────────────────────────────────────────────────
 
   useFrame((state, dt) => {
     const t = state.clock.getElapsedTime();
-    const root = rootRef.current;
-    if (root) {
-      root.position.y = Math.sin(t * 0.85) * 0.013; // gentle breathing
-      root.rotation.y = -0.58 + Math.sin(t * 0.20) * 0.038; // slow sway
+
+    // Gentle body bob + slow turn
+    if (rootRef.current) {
+      rootRef.current.position.y = Math.sin(t * 0.80) * 0.012;
+      rootRef.current.rotation.y = Math.sin(t * 0.18) * 0.032;
     }
-    const head = headRef.current;
-    if (head) {
-      head.rotation.x = -0.06 + Math.sin(t * 0.48) * 0.035; // slight downward gaze
-      head.rotation.z = Math.sin(t * 0.32) * 0.028;
+
+    // Head nod + slight tilt — looking out at ocean
+    if (headRef.current) {
+      headRef.current.rotation.x = -0.08 + Math.sin(t * 0.45) * 0.030;
+      headRef.current.rotation.y = 0.12 + Math.sin(t * 0.22) * 0.025;
+      headRef.current.rotation.z = Math.sin(t * 0.35) * 0.022;
+    }
+
+    // Left arm gentle sway (holding journal)
+    if (armLRef.current) {
+      armLRef.current.rotation.z = -0.30 + Math.sin(t * 0.60) * 0.025;
     }
 
     // Blink
     const b = blinkRef.current;
     b.t += dt;
     if (!b.closing && b.t >= b.next) { b.closing = true; b.t = 0; }
-    const closeDur = 0.07;
-    const openDur = 0.13;
+    const closeDur = 0.07, openDur = 0.12;
     let blinkY = 1;
     if (b.closing) {
       if (b.t < closeDur) {
-        blinkY = THREE.MathUtils.lerp(1, 0.06, b.t / closeDur);
+        blinkY = THREE.MathUtils.lerp(1, 0.05, b.t / closeDur);
       } else if (b.t < closeDur + openDur) {
-        blinkY = THREE.MathUtils.lerp(0.06, 1, (b.t - closeDur) / openDur);
+        blinkY = THREE.MathUtils.lerp(0.05, 1, (b.t - closeDur) / openDur);
       } else {
-        b.closing = false;
-        b.t = 0;
-        b.next = 2.4 + Math.random() * 3.6;
+        b.closing = false; b.t = 0; b.next = 2.8 + Math.random() * 3.5;
         blinkY = 1;
       }
     }
@@ -167,145 +144,231 @@ export function MiniTraveler() {
   });
 
   // ─── render ───────────────────────────────────────────────────────────────
+  //
+  // group at world [3.1, 0.15, 2.4], scale=2.1
+  // shoe bottom world_y = 0.15 + (-0.28 × 2.1) = 0.15 - 0.588 = -0.438 ≈ sand ✓
 
   return (
-    /**
-     * y=0, scale=2.25 → body bottom at world y = 0 + (-0.20 × 2.25) = -0.45
-     * Exactly at the sand surface.
-     */
-    <group ref={rootRef} position={[2.2, 0, 1.2]} rotation={[0, -0.58, 0]} scale={2.25}>
+    <group
+      ref={rootRef}
+      position={[3.1, 0.15, 2.4]}
+      rotation={[0, -1.1, 0]}   // facing roughly toward camera / ocean
+      scale={2.1}
+    >
+      {/* ── Shoes ─────────────────────────────────────────────── */}
+      {/* Left shoe */}
+      <mesh position={[-0.068, -0.245, 0.018]} castShadow>
+        <boxGeometry args={[0.085, 0.062, 0.135]} />
+        <primitive object={shoes} attach="material" />
+      </mesh>
+      {/* Shoe toe cap (rounded front) */}
+      <mesh position={[-0.068, -0.244, 0.078]} castShadow>
+        <sphereGeometry args={[0.044, 10, 8]} />
+        <primitive object={shoes} attach="material" />
+      </mesh>
 
-      {/* ── Body / jacket (ivory coat) ─────────────────── */}
-      <RoundedBox args={[0.36, 0.40, 0.25]} radius={0.12} smoothness={8} material={coat} castShadow />
+      {/* Right shoe */}
+      <mesh position={[0.068, -0.245, 0.018]} castShadow>
+        <boxGeometry args={[0.085, 0.062, 0.135]} />
+        <primitive object={shoes} attach="material" />
+      </mesh>
+      <mesh position={[0.068, -0.244, 0.078]} castShadow>
+        <sphereGeometry args={[0.044, 10, 8]} />
+        <primitive object={shoes} attach="material" />
+      </mesh>
 
-      {/* ── Left arm ──────────────────────────────────────── */}
-      <group position={[-0.22, 0.07, 0.03]} rotation={[0.15, 0, -0.32]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[0.052, 0.048, 0.26, 12]} />
-          <primitive object={coat} attach="material" />
-        </mesh>
-        {/* Left hand */}
-        <mesh position={[0, -0.15, 0]} castShadow>
-          <sphereGeometry args={[0.052, 12, 12]} />
-          <primitive object={skin} attach="material" />
-        </mesh>
-      </group>
+      {/* ── Legs (shorts visible below coat) ─────────────────── */}
+      {/* Left leg */}
+      <mesh position={[-0.068, -0.145, 0]} castShadow>
+        <cylinderGeometry args={[0.058, 0.065, 0.175, 12]} />
+        <primitive object={shorts} attach="material" />
+      </mesh>
+      {/* Right leg */}
+      <mesh position={[0.068, -0.145, 0]} castShadow>
+        <cylinderGeometry args={[0.058, 0.065, 0.175, 12]} />
+        <primitive object={shorts} attach="material" />
+      </mesh>
 
-      {/* ── Right arm (slightly more forward — reaching toward ocean) ── */}
-      <group position={[0.22, 0.07, 0.04]} rotation={[-0.12, 0.15, 0.28]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[0.052, 0.048, 0.26, 12]} />
-          <primitive object={coat} attach="material" />
-        </mesh>
-        {/* Right hand */}
-        <mesh position={[0, -0.15, 0]} castShadow>
-          <sphereGeometry args={[0.052, 12, 12]} />
-          <primitive object={skin} attach="material" />
-        </mesh>
-      </group>
+      {/* ── Body (ivory travel coat) ──────────────────────────── */}
+      <RoundedBox
+        args={[0.34, 0.38, 0.24]}
+        radius={0.10}
+        smoothness={8}
+        position={[0, 0.15, 0]}
+        material={coat}
+        castShadow
+      />
 
-      {/* ── Scarf ──────────────────────────────────────────── */}
-      <mesh position={[0, 0.19, 0.08]} rotation={[0.16, 0, 0]} castShadow>
-        <torusGeometry args={[0.115, 0.034, 14, 32]} />
+      {/* Coat lapel / front detail */}
+      <mesh position={[0, 0.20, 0.122]} castShadow>
+        <boxGeometry args={[0.08, 0.14, 0.012]} />
         <primitive object={scarf} attach="material" />
       </mesh>
 
-      {/* ── Backpack ───────────────────────────────────────── */}
-      <group position={[0, 0.08, -0.145]}>
-        <RoundedBox args={[0.23, 0.25, 0.11]} radius={0.058} smoothness={7} material={pack} castShadow />
-        {/* Backpack top strap */}
-        <mesh position={[0, 0.14, 0.04]} castShadow>
-          <boxGeometry args={[0.18, 0.025, 0.04]} />
+      {/* ── Backpack ──────────────────────────────────────────── */}
+      <group position={[0, 0.13, -0.145]}>
+        <RoundedBox
+          args={[0.20, 0.22, 0.10]}
+          radius={0.05}
+          smoothness={6}
+          material={pack}
+          castShadow
+        />
+        {/* Pack buckle strap */}
+        <mesh position={[0, 0.12, 0.04]} castShadow>
+          <boxGeometry args={[0.14, 0.022, 0.022]} />
+          <primitive object={pack} attach="material" />
+        </mesh>
+        {/* Small outer pocket */}
+        <mesh position={[0, -0.04, 0.055]} castShadow>
+          <boxGeometry args={[0.11, 0.10, 0.028]} />
           <primitive object={pack} attach="material" />
         </mesh>
       </group>
 
-      {/* ── Neck ───────────────────────────────────────────── */}
-      <mesh position={[0, 0.245, 0.01]} castShadow>
-        <cylinderGeometry args={[0.062, 0.068, 0.075, 14]} />
+      {/* ── Left arm — relaxed, hand holding a journal ────────── */}
+      <group ref={armLRef} position={[-0.21, 0.17, 0.02]} rotation={[0.15, 0, -0.30]}>
+        {/* Upper arm */}
+        <mesh castShadow>
+          <cylinderGeometry args={[0.048, 0.044, 0.22, 10]} />
+          <primitive object={coat} attach="material" />
+        </mesh>
+        {/* Hand */}
+        <mesh position={[0, -0.135, 0]} castShadow>
+          <sphereGeometry args={[0.048, 12, 12]} />
+          <primitive object={skin} attach="material" />
+        </mesh>
+        {/* Small journal in hand */}
+        <mesh position={[0.028, -0.175, 0.012]} rotation={[0.2, 0.1, 0.1]} castShadow>
+          <boxGeometry args={[0.065, 0.082, 0.014]} />
+          <primitive object={pack} attach="material" />
+        </mesh>
+      </group>
+
+      {/* ── Right arm — raised slightly, shading eyes / enjoying breeze ── */}
+      <group position={[0.21, 0.20, 0.02]} rotation={[-0.35, 0.15, 0.42]}>
+        {/* Upper arm */}
+        <mesh castShadow>
+          <cylinderGeometry args={[0.048, 0.044, 0.22, 10]} />
+          <primitive object={coat} attach="material" />
+        </mesh>
+        {/* Forearm */}
+        <mesh position={[0, -0.18, 0.02]} rotation={[-0.55, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.040, 0.044, 0.16, 10]} />
+          <primitive object={coat} attach="material" />
+        </mesh>
+        {/* Hand */}
+        <mesh position={[0, -0.145, 0.075]} castShadow>
+          <sphereGeometry args={[0.046, 12, 12]} />
+          <primitive object={skin} attach="material" />
+        </mesh>
+      </group>
+
+      {/* ── Scarf — soft loop at collar ───────────────────────── */}
+      <mesh position={[0, 0.335, 0.075]} rotation={[0.20, 0, 0]} castShadow>
+        <torusGeometry args={[0.098, 0.028, 12, 28]} />
+        <primitive object={scarf} attach="material" />
+      </mesh>
+
+      {/* ── Neck ──────────────────────────────────────────────── */}
+      <mesh position={[0, 0.375, 0.010]} castShadow>
+        <cylinderGeometry args={[0.055, 0.062, 0.070, 14]} />
         <primitive object={skin} attach="material" />
       </mesh>
 
-      {/* ── Head ───────────────────────────────────────────── */}
-      <mesh ref={headRef} position={[0, 0.365, 0.01]} castShadow>
-        <sphereGeometry args={[0.195, 32, 32]} />
-        <primitive object={skin} attach="material" />
-      </mesh>
+      {/* ── Head group (animated) ─────────────────────────────── */}
+      <group ref={headRef} position={[0, 0.490, 0.010]}>
 
-      {/* ── Face features (relative to head center at [0, 0.365, 0.01]) ── */}
+        {/* Head sphere */}
+        <mesh castShadow>
+          <sphereGeometry args={[0.185, 32, 32]} />
+          <primitive object={skin} attach="material" />
+        </mesh>
 
-      {/* Left eye */}
-      <mesh ref={eyeLRef} position={[-0.082, 0.395, 0.178]} castShadow>
-        <sphereGeometry args={[0.024, 18, 18]} />
-        <primitive object={ink} attach="material" />
-      </mesh>
-      {/* Left eye highlight */}
-      <mesh position={[-0.076, 0.408, 0.189]}>
-        <sphereGeometry args={[0.009, 10, 10]} />
-        <primitive object={inkHighlight} attach="material" />
-      </mesh>
+        {/* ── Eyes ──────────────────────────────────────────── */}
+        {/* Left eye */}
+        <mesh ref={eyeLRef} position={[-0.078, 0.030, 0.165]} castShadow>
+          <sphereGeometry args={[0.026, 18, 18]} />
+          <primitive object={ink} attach="material" />
+        </mesh>
+        <mesh position={[-0.072, 0.043, 0.178]}>
+          <sphereGeometry args={[0.009, 10, 10]} />
+          <primitive object={inkHL} attach="material" />
+        </mesh>
+        {/* Right eye */}
+        <mesh ref={eyeRRef} position={[0.078, 0.030, 0.165]} castShadow>
+          <sphereGeometry args={[0.026, 18, 18]} />
+          <primitive object={ink} attach="material" />
+        </mesh>
+        <mesh position={[0.084, 0.043, 0.178]}>
+          <sphereGeometry args={[0.009, 10, 10]} />
+          <primitive object={inkHL} attach="material" />
+        </mesh>
 
-      {/* Right eye */}
-      <mesh ref={eyeRRef} position={[0.082, 0.395, 0.178]} castShadow>
-        <sphereGeometry args={[0.024, 18, 18]} />
-        <primitive object={ink} attach="material" />
-      </mesh>
-      {/* Right eye highlight */}
-      <mesh position={[0.088, 0.408, 0.189]}>
-        <sphereGeometry args={[0.009, 10, 10]} />
-        <primitive object={inkHighlight} attach="material" />
-      </mesh>
+        {/* ── Eyebrows — gentle arched ──────────────────────── */}
+        <mesh position={[-0.078, 0.068, 0.158]} rotation={[0.22, 0, 0.14]}>
+          <boxGeometry args={[0.050, 0.010, 0.008]} />
+          <primitive object={brow} attach="material" />
+        </mesh>
+        <mesh position={[0.078, 0.068, 0.158]} rotation={[0.22, 0, -0.14]}>
+          <boxGeometry args={[0.050, 0.010, 0.008]} />
+          <primitive object={brow} attach="material" />
+        </mesh>
 
-      {/* Left eyebrow — slight downward inward angle (thoughtful expression) */}
-      <mesh position={[-0.082, 0.432, 0.172]} rotation={[0.2, 0, 0.18]}>
-        <boxGeometry args={[0.048, 0.010, 0.008]} />
-        <primitive object={brow} attach="material" />
-      </mesh>
-      {/* Right eyebrow */}
-      <mesh position={[0.082, 0.432, 0.172]} rotation={[0.2, 0, -0.18]}>
-        <boxGeometry args={[0.048, 0.010, 0.008]} />
-        <primitive object={brow} attach="material" />
-      </mesh>
+        {/* ── Nose ──────────────────────────────────────────── */}
+        <mesh position={[0, 0.008, 0.184]}>
+          <sphereGeometry args={[0.015, 12, 12]} />
+          <primitive object={skin} attach="material" />
+        </mesh>
 
-      {/* Nose — subtle bump */}
-      <mesh position={[0, 0.370, 0.192]}>
-        <sphereGeometry args={[0.014, 12, 12]} />
-        <primitive object={skin} attach="material" />
-      </mesh>
+        {/* ── Mouth — relaxed smile arc ─────────────────────── */}
+        <mesh position={[0, -0.028, 0.175]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.028, 0.006, 10, 24, Math.PI * 0.75]} />
+          <primitive object={ink} attach="material" />
+        </mesh>
 
-      {/* Mouth — relaxed smile */}
-      <mesh position={[0, 0.338, 0.183]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.026, 0.0055, 10, 28, Math.PI * 0.8]} />
-        <primitive object={ink} attach="material" />
-      </mesh>
+        {/* ── Cheek blush ───────────────────────────────────── */}
+        <mesh position={[-0.104, 0.012, 0.158]} rotation={[0.15, 0.20, 0]}>
+          <circleGeometry args={[0.030, 20]} />
+          <primitive object={blush} attach="material" />
+        </mesh>
+        <mesh position={[0.104, 0.012, 0.158]} rotation={[0.15, -0.20, 0]}>
+          <circleGeometry args={[0.030, 20]} />
+          <primitive object={blush} attach="material" />
+        </mesh>
 
-      {/* Left cheek blush */}
-      <mesh position={[-0.108, 0.370, 0.167]} rotation={[0.15, 0.18, 0]}>
-        <circleGeometry args={[0.032, 20]} />
-        <primitive object={blush} attach="material" />
-      </mesh>
-      {/* Right cheek blush */}
-      <mesh position={[0.108, 0.370, 0.167]} rotation={[0.15, -0.18, 0]}>
-        <circleGeometry args={[0.032, 20]} />
-        <primitive object={blush} attach="material" />
-      </mesh>
+        {/* ── Ear nubbins ───────────────────────────────────── */}
+        <mesh position={[-0.186, 0.010, 0.010]}>
+          <sphereGeometry args={[0.030, 10, 10]} />
+          <primitive object={skin} attach="material" />
+        </mesh>
+        <mesh position={[0.186, 0.010, 0.010]}>
+          <sphereGeometry args={[0.030, 10, 10]} />
+          <primitive object={skin} attach="material" />
+        </mesh>
 
-      {/* ── Hat — wide flat-brim straw hat ─────────────────── */}
-      {/* Crown */}
-      <mesh position={[0, 0.546, 0.01]} castShadow>
-        <cylinderGeometry args={[0.155, 0.175, 0.115, 28]} />
-        <primitive object={hatStraw} attach="material" />
-      </mesh>
-      {/* Flat brim disc */}
-      <mesh position={[0, 0.490, 0.01]} castShadow>
-        <cylinderGeometry args={[0.295, 0.295, 0.038, 36]} />
-        <primitive object={hatStraw} attach="material" />
-      </mesh>
-      {/* Hat band — terracotta ribbon at base of crown */}
-      <mesh position={[0, 0.493, 0.01]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-        <torusGeometry args={[0.176, 0.020, 10, 32]} />
-        <primitive object={hatBand} attach="material" />
-      </mesh>
+        {/* ── Wide-brim straw hat ────────────────────────────── */}
+        {/* Brim disc */}
+        <mesh position={[0, 0.155, 0.010]} rotation={[0.08, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.285, 0.285, 0.036, 36]} />
+          <primitive object={hatStraw} attach="material" />
+        </mesh>
+        {/* Crown */}
+        <mesh position={[0, 0.248, 0.010]} rotation={[0.08, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.148, 0.170, 0.110, 28]} />
+          <primitive object={hatStraw} attach="material" />
+        </mesh>
+        {/* Hat band — terracotta stripe */}
+        <mesh position={[0, 0.196, 0.010]} rotation={[Math.PI / 2 + 0.08, 0, 0]} castShadow>
+          <torusGeometry args={[0.168, 0.019, 10, 32]} />
+          <primitive object={hatBand} attach="material" />
+        </mesh>
+        {/* Small hatband bow detail */}
+        <mesh position={[-0.12, 0.198, 0.118]} rotation={[0.08, -0.4, 0.1]}>
+          <boxGeometry args={[0.040, 0.018, 0.010]} />
+          <primitive object={hatBand} attach="material" />
+        </mesh>
+      </group>
     </group>
   );
 }
