@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { Bloom, DepthOfField, EffectComposer, N8AO, Noise, Vignette } from "@react-three/postprocessing";
+import { Bloom, EffectComposer, N8AO, Noise, Vignette } from "@react-three/postprocessing";
 
 import { BeachWorld } from "@/unknown-beach/world/BeachWorld";
 
@@ -9,18 +9,17 @@ export function BeachScene() {
       <Canvas
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
-        camera={{ fov: 45, position: [0, 3.4, 7.6], near: 0.1, far: 80 }}
+        shadows
+        camera={{ fov: 50, position: [1.5, 7.5, 12], near: 0.1, far: 100 }}
       >
         <BeachWorld />
         <EffectComposer multisampling={4}>
-          <N8AO aoRadius={1.2} intensity={1.15} distanceFalloff={1.2} />
-          <DepthOfField focusDistance={0.03} focalLength={0.02} bokehScale={1.6} height={480} />
-          <Bloom luminanceThreshold={0.6} luminanceSmoothing={0.9} intensity={0.45} />
-          <Noise opacity={0.02} />
-          <Vignette eskil={false} offset={0.12} darkness={0.85} />
+          <N8AO aoRadius={1.6} intensity={1.2} distanceFalloff={1.0} />
+          <Bloom luminanceThreshold={0.96} luminanceSmoothing={0.9} intensity={0.06} />
+          <Noise opacity={0.010} />
+          <Vignette eskil={false} offset={0.22} darkness={0.52} />
         </EffectComposer>
       </Canvas>
     </div>
   );
 }
-

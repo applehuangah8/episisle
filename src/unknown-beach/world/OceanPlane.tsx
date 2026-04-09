@@ -6,21 +6,21 @@ export function OceanPlane() {
   const ref = useRef<THREE.Mesh>(null);
 
   const geom = useMemo(() => {
-    const g = new THREE.PlaneGeometry(40, 18, 96, 32);
+    // Wider plane, fully surrounds the island
+    const g = new THREE.PlaneGeometry(52, 52, 80, 80);
     g.rotateX(-Math.PI / 2);
     return g;
   }, []);
 
+  // Deep navy — Image 2 slate blue-navy
   const mat = useMemo(
     () =>
       new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#2f6f7a"),
-        roughness: 0.22,
-        metalness: 0.0,
-        transmission: 0.08,
-        thickness: 1.0,
-        clearcoat: 0.55,
-        clearcoatRoughness: 0.18,
+        color: new THREE.Color("#2a5878"),  // slightly lighter navy-teal
+        roughness: 0.48,
+        metalness: 0.02,
+        clearcoat: 0.28,
+        clearcoatRoughness: 0.72,  // very spread highlights — no spike, just gentle shimmer
       }),
     []
   );
@@ -34,15 +34,16 @@ export function OceanPlane() {
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
-      const y = Math.sin(x * 0.22 + t * 0.6) * 0.04 + Math.sin(z * 0.18 + t * 0.75) * 0.03;
+      const y =
+        Math.sin(x * 0.20 + t * 0.55) * 0.045 +
+        Math.sin(z * 0.16 + t * 0.70) * 0.032 +
+        Math.sin(x * 0.38 + z * 0.28 + t * 0.9) * 0.014;
       pos.setY(i, y);
     }
     pos.needsUpdate = true;
     g.computeVertexNormals();
   });
 
-  return (
-    <mesh ref={ref} geometry={geom} material={mat} position={[0, -0.98, -8.5]} receiveShadow />
-  );
+  // Centered on island so ocean surrounds it equally on all sides
+  return <mesh ref={ref} geometry={geom} material={mat} position={[0, -0.98, 0]} receiveShadow />;
 }
-
