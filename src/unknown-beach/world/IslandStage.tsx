@@ -38,35 +38,49 @@ export function IslandStage() {
     return g;
   }, []);
 
-  // Warm ivory sand — Image 2 cream/ivory
+  // Warm golden sand — more saturated than ivory for sun-baked look
   const sand = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#f0e5d4"),
-        roughness: 0.97,
+        color: new THREE.Color("#f5ddb0"),
+        roughness: 0.95,
         metalness: 0,
       }),
     []
   );
 
-  // Terracotta cliff sides — Image 2 brick-red
+  // Vivid terracotta cliff — painterly toy-world look
   const cliff = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#c06845"),
-        roughness: 0.86,
+        color: new THREE.Color("#cc6840"),
+        roughness: 0.82,
         metalness: 0,
       }),
     []
   );
 
-  // Wet shoreline — slightly darker, cooler sand at water's edge
+  // Wet shoreline — slightly blue-green tinted wet sand at water edge
   const shore = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#d4c5b0"),
-        roughness: 0.98,
+        color: new THREE.Color("#c8d4b8"),
+        roughness: 0.96,
         metalness: 0,
+      }),
+    []
+  );
+
+  // Foam edge — bright cream with slight emissive glow for water foam
+  const foam = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color("#e8f0e8"),
+        roughness: 0.88,
+        emissive: new THREE.Color("#c8dcc8"),
+        emissiveIntensity: 0.18,
+        transparent: true,
+        opacity: 0.82,
       }),
     []
   );
@@ -82,10 +96,16 @@ export function IslandStage() {
         <primitive object={sand} attach="material" />
       </mesh>
 
-      {/* Shore ring — wet sand 0.8 units wide around edge */}
+      {/* Shore ring — wet/mossy sand at water's edge */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.438, 0]} receiveShadow>
         <ringGeometry args={[3.35, 4.45, 128]} />
         <primitive object={shore} attach="material" />
+      </mesh>
+
+      {/* Foam ring — bright water-edge foam just outside island */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.96, 0]}>
+        <ringGeometry args={[4.42, 5.10, 128]} />
+        <primitive object={foam} attach="material" />
       </mesh>
     </group>
   );

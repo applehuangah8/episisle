@@ -321,9 +321,9 @@ export function MiniTraveler() {
           <primitive object={skin} attach="material" />
         </mesh>
 
-        {/* ── Mouth — relaxed smile arc ─────────────────────── */}
-        <mesh position={[0, -0.028, 0.175]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.028, 0.006, 10, 24, Math.PI * 0.75]} />
+        {/* ── Mouth — U-smile arc facing camera ────────────────── */}
+        <mesh position={[0, -0.030, 0.177]} rotation={[0, 0, Math.PI]}>
+          <torusGeometry args={[0.030, 0.008, 10, 28, Math.PI * 0.72]} />
           <primitive object={ink} attach="material" />
         </mesh>
 
