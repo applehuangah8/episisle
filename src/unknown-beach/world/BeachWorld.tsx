@@ -36,7 +36,7 @@ export function BeachWorld() {
       <directionalLight position={[-0.5, 1.8, -8]} intensity={0.60} color="#ffaa60" />
 
       {/* Canvas alpha:true — body CSS gradient shows as sky */}
-      <fogExp2 attach="fog" args={["#80aac4", 0.010]} />
+      <fogExp2 attach="fog" args={["#6898b8", 0.010]} />
 
       <OceanPlane />
       <IslandStage />

@@ -15,12 +15,11 @@ export function OceanPlane() {
   const mat = useMemo(
     () =>
       new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color("#1a8868"),
-        roughness: 0.28,
-        metalness: 0.04,
-        clearcoat: 0.55,
-        clearcoatRoughness: 0.42,
-        envMapIntensity: 1.2,
+        color: new THREE.Color("#1a6880"),
+        roughness: 0.42,
+        metalness: 0.02,
+        clearcoat: 0.30,
+        clearcoatRoughness: 0.62,   // softer highlights, less spike
       }),
     []
   );

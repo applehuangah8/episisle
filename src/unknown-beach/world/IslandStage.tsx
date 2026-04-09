@@ -60,27 +60,25 @@ export function IslandStage() {
     []
   );
 
-  // Wet shoreline — slightly blue-green tinted wet sand at water edge
+  // Wet shoreline — slightly cool, damp sand at water edge
   const shore = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#c8d4b8"),
+        color: new THREE.Color("#d8cab0"),   // cool damp sand, not green
         roughness: 0.96,
         metalness: 0,
       }),
     []
   );
 
-  // Foam edge — bright cream with slight emissive glow for water foam
+  // Foam edge — narrow bright rim just outside island base, very transparent
   const foam = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#e8f0e8"),
-        roughness: 0.88,
-        emissive: new THREE.Color("#c8dcc8"),
-        emissiveIntensity: 0.18,
+        color: new THREE.Color("#e8f2f0"),
+        roughness: 0.90,
         transparent: true,
-        opacity: 0.82,
+        opacity: 0.55,
       }),
     []
   );
@@ -104,7 +102,7 @@ export function IslandStage() {
 
       {/* Foam ring — bright water-edge foam just outside island */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.96, 0]}>
-        <ringGeometry args={[4.42, 5.10, 128]} />
+        <ringGeometry args={[4.42, 4.88, 128]} />
         <primitive object={foam} attach="material" />
       </mesh>
     </group>
