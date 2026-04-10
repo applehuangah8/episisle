@@ -1,0 +1,27 @@
+/**
+ * Salon chroma — milk wall, dusk violet, champagne breath.
+ */
+:root {
+  --mesh-a: #faf8f5;
+  --mesh-b: #ece6f2;
+  --mesh-c: #e5dfd6;
+  --mesh-d: #ddd4e8;
+  --mesh-gold: rgba(210, 185, 150, 0.22);
+  --mesh-gold-deep: rgba(188, 160, 120, 0.12);
+  --curtain: rgba(255, 253, 251, 0.55);
+  --ink-dust: #6a6278;
+  /* Navy-slate for readable body on frosted / cream (palette: deep teal & charcoal) */
+  --ink-body: #243240;
+  --ink-mist: #8a8294;
+  --ink-fog: #a39aaa;
+  --lavender-deep: #958aa5;
+  --champagne-mist: rgba(200, 175, 140, 0.18);
+  --gold-aura: rgba(196, 165, 116, 0.42);
+  --glass-haze: rgba(255, 253, 251, 0.07);
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-elegant: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+  --z-back: 0;
+  --z-mid: 3;
+  --z-near: 6;
+  --z-front: 9;
+}
